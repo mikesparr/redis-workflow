@@ -17,7 +17,6 @@
   },
   "dependencies": {
     "@types/redis": "^2.8.6",
-    "composer": "^3.0.1",
     "events": "^2.0.0",
     "mozjexl": "^1.1.6",
     "redis": "^2.8.0"

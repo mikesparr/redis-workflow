@@ -1,5 +1,9 @@
 # Redis Workflow
-Dynamic rules engine to allow configurable workflow in app without requiring code changes.
+Dynamic rules engine to allow configurable workflow in app without requiring code changes. 
+Using Redis as backing service, you can design workflows and whenever you `run(channel)` your workflow, 
+it will load your stored workflow(s) then attach a `pubsub` listener to Redis. Any time your 
+`pubsub` channel message appears, it will parse the event object, perform conditional logic, and if true 
+emit one or more defined actions.
 
 This app is loosely-based on popular enterprise systems workflow rules or business process features.
  * Trigger (or event) - something happened
@@ -23,7 +27,13 @@ The message published to the topic will include a JSON string.
 Uses `mozjexl` Javascript expression language to evaluate string expressions, evaluating to `true` or `false`.
 
 ## Actions
-Uses `composer` to chain multiple tasks and execute. I'm still undecided and testing this before publishing module.
+You define actions when building workflows. The action name will become an `EventEmitter` event you handle.
+
+```typescript
+myWorkflow.on("my_action", () => {
+    // handle action here
+});
+```
 
 ### Suggested action types
  * Create record(s)
