@@ -24,18 +24,22 @@ export enum WorkflowEvents {
     Load = "load",
     Run = "run",
     Stop = "stop",
+    Kill = "kill"
 }
 
 export class RedisWorkflow extends EventEmitter implements IWorkflow {
     protected client: redis.RedisClient;
+    protected subscriber: redis.RedisClient;
     protected readonly DEFAULT_REDIS_HOST: string = "localhost";
     protected readonly DEFAULT_REDIS_PORT: number = 6379;
+    protected readonly PUBSUB_KILL_MESSAGE: string = "WFKILL";
 
     constructor(config: RedisConfig, client?: redis.RedisClient) {
         super();
 
         if (client && client instanceof redis.RedisClient) {
             this.client = client;
+            this.subscriber = client;
         } else {
             // build properties for instantiating Redis
             const options: {[key: string]: any} = {
@@ -64,6 +68,7 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
             if (config.password) { options.password = config.password; }
 
             this.client = redis.createClient(options);
+            this.subscriber = redis.createClient(options);
         }
     }
 
@@ -112,19 +117,37 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
         });
     }
 
-    public run(channel: string, events?: (err: Error, event: any) => void): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (typeof channel !== "string") {
-                throw new TypeError("Channel parameter must be a string");
+    public run(channel: string): void {
+        if (typeof channel !== "string") {
+            throw new TypeError("Channel parameter must be a string");
+        }
+
+        // get all workflows for channel
+
+        // default handler
+        this.subscriber.on("message", (channel: string, message: string) => {
+            console.log({channel, message});
+
+            if (message === this.PUBSUB_KILL_MESSAGE) {
+                console.log(`Kill message detected. Shutting down...`);
+                this.subscriber.unsubscribe(channel);
+                this.emit(WorkflowEvents.Kill);
+                //process.exit(0);
+            } else {
+                // parse message and extract event
+
+                // if invalid event object, emit error
+
+                // if valid trigger, apply condition and then emit action(s)
+
+                console.log(`Received message ${message}`);
+                this.emit(message); // test
             }
-
-            // get all workflows for channel
-
-            // start listener
-
-            this.emit(WorkflowEvents.Run);
-            resolve();
         });
+
+        // start listener
+        this.emit(WorkflowEvents.Run);
+        this.subscriber.subscribe(channel);
     }
 
     public stop(channel: string): Promise<void> {
@@ -133,8 +156,11 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
                 throw new TypeError("Channel parameter must be a string");
             }
 
-            this.emit(WorkflowEvents.Stop);
-            resolve();
+            // publish kill message to channel
+            this.client.publish(channel, this.PUBSUB_KILL_MESSAGE, (err: Error, reply: number) => {
+                this.emit(WorkflowEvents.Stop);
+                resolve();
+            });
         });
     }
 }

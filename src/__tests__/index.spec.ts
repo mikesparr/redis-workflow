@@ -11,6 +11,8 @@ describe("RedisWorkflow", () => {
     );
     const myWorkflow: IWorkflow = new RedisWorkflow(config);
     const testKey: string = "test123";
+    const testEvent: string = "test_event_888";
+    const testKillMessage: string = "WFKILL"; // keep in sync with class
     const testEmptyKey: string = "testEmptyKey999";
     const testName: string = "testWorkflow1";
 
@@ -87,19 +89,38 @@ describe("RedisWorkflow", () => {
     }); // load
 
     describe("run", () => {
-        it("returns a Promise", () => {
-            expect(myWorkflow.run(testEmptyKey)).toBeInstanceOf(Promise);
-        });
-
         it("emits an EventEmitter event", (done) => {
             // arrange
             myWorkflow.on(WorkflowEvents.Run, () => {
                 // assert
+                console.log(`Run was called`);
                 done();
             });
 
             // act
             myWorkflow.run(testEmptyKey);
+        });
+
+        it("starts a pubsub listener and applies workflows to messages", (done) => {
+            // arrange
+            myWorkflow.on(testEvent, () => {
+                console.log(`Test event fired!!!`);
+                done();
+            });
+
+            // act
+            myWorkflow.run(testKey);
+
+            setTimeout(() => {
+                client.publish(testKey, testEvent, (pubErr: Error, reply: number) => {
+                    console.log(`Published ${testEvent} to pubsub`);
+    
+                    // now kill it
+                    client.publish(testKey, testKillMessage, (killErr: Error, reply: number) => {
+                        console.log(`Published kill message`);
+                    });
+                });
+            }, 3000);
         });
 
     }); // run

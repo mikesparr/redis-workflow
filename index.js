@@ -23,6 +23,7 @@ var WorkflowEvents;
     WorkflowEvents["Load"] = "load";
     WorkflowEvents["Run"] = "run";
     WorkflowEvents["Stop"] = "stop";
+    WorkflowEvents["Kill"] = "kill";
 })(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
 var RedisWorkflow = (function (_super) {
     __extends(RedisWorkflow, _super);
@@ -30,8 +31,10 @@ var RedisWorkflow = (function (_super) {
         var _this = _super.call(this) || this;
         _this.DEFAULT_REDIS_HOST = "localhost";
         _this.DEFAULT_REDIS_PORT = 6379;
+        _this.PUBSUB_KILL_MESSAGE = "WFKILL";
         if (client && client instanceof redis.RedisClient) {
             _this.client = client;
+            _this.subscriber = client;
         }
         else {
             var options = {
@@ -57,6 +60,7 @@ var RedisWorkflow = (function (_super) {
                 options.password = config.password;
             }
             _this.client = redis.createClient(options);
+            _this.subscriber = redis.createClient(options);
         }
         return _this;
     }
@@ -102,14 +106,23 @@ var RedisWorkflow = (function (_super) {
             resolve();
         });
     };
-    RedisWorkflow.prototype.run = function (channel, events) {
+    RedisWorkflow.prototype.run = function (channel) {
         var _this = this;
-        return new Promise(function (resolve, reject) {
-            if (typeof channel !== "string") {
-                throw new TypeError("Channel parameter must be a string");
+        if (typeof channel !== "string") {
+            throw new TypeError("Channel parameter must be a string");
+        }
+        this.emit(WorkflowEvents.Run);
+        this.subscriber.subscribe(channel);
+        this.subscriber.on("message", function (channel, message) {
+            console.log({ channel: channel, message: message });
+            if (message === _this.PUBSUB_KILL_MESSAGE) {
+                _this.subscriber.unsubscribe(channel);
+                _this.emit(WorkflowEvents.Kill);
+                process.exit(0);
             }
-            _this.emit(WorkflowEvents.Run);
-            resolve();
+            else {
+                _this.emit(message);
+            }
         });
     };
     RedisWorkflow.prototype.stop = function (channel) {
@@ -118,8 +131,10 @@ var RedisWorkflow = (function (_super) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
-            _this.emit(WorkflowEvents.Stop);
-            resolve();
+            _this.client.publish(channel, _this.PUBSUB_KILL_MESSAGE, function (err, reply) {
+                _this.emit(WorkflowEvents.Stop);
+                resolve();
+            });
         });
     };
     return RedisWorkflow;

@@ -7,6 +7,6 @@ export default interface IWorkflow extends EventEmitter {
     add(channel: string, name: string, trigger: Trigger, rules: [Rule], actions: [Action]): Promise<void>;
     remove(channel: string): Promise<void>;
     load(channel: string): Promise<void>;
-    run(channel: string, events?: (err: Error, event: any) => void): Promise<void>;
+    run(channel: string): void;
     stop(channel: string): Promise<void>;
 }
