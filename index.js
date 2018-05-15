@@ -70,13 +70,13 @@ var RedisWorkflow = (function (_super) {
                 throw new TypeError("Name parameter must be a string");
             }
             if (trigger instanceof Trigger_1.default) {
-                throw new TypeError("Trigger parameter must be a Trigger");
+                throw new TypeError("Trigger parameter must be an ITrigger");
             }
             if (rules instanceof Array) {
-                throw new TypeError("Rules parameter must be an Array<Rule>");
+                throw new TypeError("Rules parameter must be an Array<IRule>");
             }
             if (actions instanceof Array) {
-                throw new TypeError("Actions parameter must be a Array<Action>");
+                throw new TypeError("Actions parameter must be a Array<IAction>");
             }
             _this.emit(WorkflowEvents.Add);
             resolve();

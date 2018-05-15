@@ -1,12 +1,18 @@
 import { EventEmitter } from "events";
 import * as redis from "redis";
 import Action from "./lib/Action";
+import IAction from "./lib/IAction";
+import IRule from "./lib/IRule";
+import ITrigger from "./lib/ITrigger";
 import IWorkflow from "./lib/IWorkflow";
 import RedisConfig from "./lib/RedisConfig";
 import Rule from "./lib/Rule";
 import Trigger from "./lib/Trigger";
 
 export {
+    IAction,
+    IRule,
+    ITrigger,
     IWorkflow,
     RedisConfig,
 };
@@ -61,7 +67,7 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
         }
     }
 
-    public add(channel: string, name: string, trigger: Trigger, rules: [Rule], actions: [Action]): Promise<void> {
+    public add(channel: string, name: string, trigger: ITrigger, rules: [IRule], actions: [IAction]): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
@@ -70,13 +76,13 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
                 throw new TypeError("Name parameter must be a string");
             }
             if (trigger ! instanceof Trigger) {
-                throw new TypeError("Trigger parameter must be a Trigger");
+                throw new TypeError("Trigger parameter must be an ITrigger");
             }
             if (rules ! instanceof Array) {
-                throw new TypeError("Rules parameter must be an Array<Rule>");
+                throw new TypeError("Rules parameter must be an Array<IRule>");
             }
             if (actions ! instanceof Array) {
-                throw new TypeError("Actions parameter must be a Array<Action>");
+                throw new TypeError("Actions parameter must be a Array<IAction>");
             }
 
             this.emit(WorkflowEvents.Add);
