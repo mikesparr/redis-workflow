@@ -1,0 +1,57 @@
+{
+  "name": "redis-workflow",
+  "version": "0.1.0",
+  "description": "Simple promise based workflow rules engine using Redis backing",
+  "main": "index.js",
+  "scripts": {
+    "build": "./node_modules/.bin/tsc",
+    "lint": "./node_modules/.bin/tslint -c tslint.json 'src/**/*.ts'",
+    "test": "./node_modules/.bin/jest",
+    "coverage": "./node_modules/.bin/jest --coverage"
+  },
+  "devDependencies": {
+    "@types/jest": "^22.2.3",
+    "jest": "^22.4.3",
+    "tslint": "^5.10.0",
+    "typescript": "^2.8.3"
+  },
+  "dependencies": {
+    "@types/redis": "^2.8.6",
+    "composer": "^3.0.1",
+    "mozjexl": "^1.1.6",
+    "redis": "^2.8.0"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js"
+    ],
+    "transform": {
+      "^.+\\.(ts|tsx)$": "<rootDir>/preprocessor.js"
+    },
+    "testMatch": [
+      "**/__tests__/*.+(ts|tsx|js)"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikesparr/redis-workflow.git"
+  },
+  "keywords": [
+    "workflow",
+    "redis",
+    "rules",
+    "engine",
+    "flow",
+    "process",
+    "chain",
+    "task"
+  ],
+  "author": "Mike Sparr",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mikesparr/redis-workflow/issues"
+  },
+  "homepage": "https://github.com/mikesparr/redis-workflow#readme"
+}
