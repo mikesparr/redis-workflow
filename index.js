@@ -1,29 +1,42 @@
 "use strict";
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
+var events_1 = require("events");
 var redis = require("redis");
-var RedisConfig = (function () {
-    function RedisConfig(host, port, db, password) {
-        this.host = host;
-        this.port = port;
-        this.db = db ? db : null;
-        this.password = password ? password : null;
-    }
-    return RedisConfig;
-}());
-exports.RedisConfig = RedisConfig;
-var RedisWorkflow = (function () {
+var RedisConfig_1 = require("./lib/RedisConfig");
+exports.RedisConfig = RedisConfig_1.default;
+var Trigger_1 = require("./lib/Trigger");
+var WorkflowEvents;
+(function (WorkflowEvents) {
+    WorkflowEvents["Error"] = "error";
+    WorkflowEvents["Add"] = "add";
+    WorkflowEvents["Remove"] = "remove";
+    WorkflowEvents["Load"] = "load";
+    WorkflowEvents["Run"] = "run";
+    WorkflowEvents["Stop"] = "stop";
+})(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
+var RedisWorkflow = (function (_super) {
+    __extends(RedisWorkflow, _super);
     function RedisWorkflow(config, client) {
-        this.DEFAULT_REDIS_HOST = "localhost";
-        this.DEFAULT_REDIS_PORT = 6379;
-        this.ENTRY_TYPE = "entries";
-        this.PEER_TYPE = "peers";
+        var _this = _super.call(this) || this;
+        _this.DEFAULT_REDIS_HOST = "localhost";
+        _this.DEFAULT_REDIS_PORT = 6379;
         if (client && client instanceof redis.RedisClient) {
-            this.client = client;
+            _this.client = client;
         }
         else {
             var options = {
-                host: config.host || this.DEFAULT_REDIS_HOST,
-                port: config.port || this.DEFAULT_REDIS_PORT,
+                host: config.host || _this.DEFAULT_REDIS_HOST,
+                port: config.port || _this.DEFAULT_REDIS_PORT,
                 retry_strategy: function (status) {
                     if (status.error && status.error.code === "ECONNREFUSED") {
                         return new Error("The server refused the connection");
@@ -43,38 +56,73 @@ var RedisWorkflow = (function () {
             if (config.password) {
                 options.password = config.password;
             }
-            this.client = redis.createClient(options);
+            _this.client = redis.createClient(options);
         }
+        return _this;
     }
-    RedisWorkflow.prototype.length = function (channel) {
+    RedisWorkflow.prototype.add = function (channel, name, trigger, rules, actions) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
-            _this.client.zcard([channel, _this.PEER_TYPE].join(":"), function (err, reply) {
-                if (err !== null) {
-                    reject(err);
-                }
-                resolve(reply);
-            });
+            if (typeof name !== "string") {
+                throw new TypeError("Name parameter must be a string");
+            }
+            if (trigger instanceof Trigger_1.default) {
+                throw new TypeError("Trigger parameter must be a Trigger");
+            }
+            if (rules instanceof Array) {
+                throw new TypeError("Rules parameter must be an Array<Rule>");
+            }
+            if (actions instanceof Array) {
+                throw new TypeError("Actions parameter must be a Array<Action>");
+            }
+            _this.emit(WorkflowEvents.Add);
+            resolve();
         });
     };
-    RedisWorkflow.prototype.isEmpty = function (channel) {
+    RedisWorkflow.prototype.remove = function (channel) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
-            _this.client.zcard([channel, _this.PEER_TYPE].join(":"), function (err, reply) {
-                if (err !== null) {
-                    reject(err);
-                }
-                resolve(reply === 0);
-            });
+            _this.emit(WorkflowEvents.Remove);
+            resolve();
+        });
+    };
+    RedisWorkflow.prototype.load = function (channel) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+            _this.emit(WorkflowEvents.Load);
+            resolve();
+        });
+    };
+    RedisWorkflow.prototype.run = function (channel, events) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+            _this.emit(WorkflowEvents.Run);
+            resolve();
+        });
+    };
+    RedisWorkflow.prototype.stop = function (channel) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+            _this.emit(WorkflowEvents.Stop);
+            resolve();
         });
     };
     return RedisWorkflow;
-}());
+}(events_1.EventEmitter));
 exports.RedisWorkflow = RedisWorkflow;
 //# sourceMappingURL=index.js.map
