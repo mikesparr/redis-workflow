@@ -1,6 +1,6 @@
 {
   "name": "redis-workflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Simple promise based workflow rules engine using Redis backing",
   "main": "index.js",
   "scripts": {
