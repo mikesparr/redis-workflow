@@ -1,6 +1,6 @@
 import { EventEmitter } from "events";
 import * as redis from "redis";
-import { IWorkflow, RedisConfig, RedisWorkflow, WorkflowEvents } from "../index";
+import { IWorkflow, IWorkflowManager, RedisConfig, RedisWorkflowManager, Workflow, WorkflowEvents } from "../index";
 
 describe("RedisWorkflow", () => {
     const config: RedisConfig = new RedisConfig(
@@ -9,7 +9,7 @@ describe("RedisWorkflow", () => {
         null,
         null,
     );
-    const myWorkflow: IWorkflow = new RedisWorkflow(config);
+    const manager: IWorkflowManager = new RedisWorkflowManager(config);
     const testKey: string = "test123";
     const testEvent: string = "test_event_888";
     const testKillMessage: string = "WFKILL"; // keep in sync with class
@@ -19,12 +19,12 @@ describe("RedisWorkflow", () => {
     const client: any = redis.createClient(); // for confirming app TODO: mock
 
     it("instantiates a Workflow", () => {
-        expect(myWorkflow).toBeInstanceOf(RedisWorkflow);
+        expect(manager).toBeInstanceOf(RedisWorkflowManager);
     }); // constructor
 
     it("uses existing RedisClient if passed", () => {
-        const workflowWithClient: IWorkflow = new RedisWorkflow(null, client);
-        expect(workflowWithClient).toBeInstanceOf(RedisWorkflow);
+        const workflowWithClient: IWorkflowManager = new RedisWorkflowManager(null, client);
+        expect(workflowWithClient).toBeInstanceOf(RedisWorkflowManager);
     }); // constructor
 
     beforeAll((done) => {
@@ -35,112 +35,112 @@ describe("RedisWorkflow", () => {
         done();
     });
 
-    describe("add", () => {
+    describe("getWorkflows", () => {
+        it("returns array of workflows", (done) => {
+            // arrange
+            const testWf: IWorkflow = new Workflow("test", null, null, null);
+
+            // act
+            manager.addWorkflow(testKey, testWf)
+                .then(() => {
+                    const result: IWorkflow[] = manager.getWorkflows();
+
+                    // assert
+                    expect(result.length).toEqual(1);
+                    expect(result[0]).toBeInstanceOf(Workflow);
+                    done();
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
+        });
+    }); // getWorkflows
+
+    describe("setWorkflows", () => {
+        it("replaces workflows with provided array", () => {
+            // arrange
+            const testWf: IWorkflow = new Workflow("test", null, null, null);
+
+            // act
+            manager.setWorkflows([testWf]);
+            const result: IWorkflow[] = manager.getWorkflows();
+
+            // assert
+            expect(result.length).toEqual(1);
+            expect(result[0]).toBeInstanceOf(Workflow);
+        });
+    }); // getWorkflows
+
+    describe("addWorkflow", () => {
         it("returns a Promise", () => {
-            expect(myWorkflow.add(testEmptyKey, testName, null, null, null)).toBeInstanceOf(Promise);
+            expect(manager.addWorkflow(testEmptyKey, null)).toBeInstanceOf(Promise);
         });
 
         it("emits an EventEmitter event", (done) => {
             // arrange
-            myWorkflow.on(WorkflowEvents.Add, () => {
+            manager.on(WorkflowEvents.Add, () => {
                 // assert
                 done();
             });
 
             // act
-            myWorkflow.add(testEmptyKey, testName, null, null, null);
+            manager.addWorkflow(testEmptyKey, null);
         });
-    }); // add
-
-    describe("remove", () => {
-        it("returns a Promise", () => {
-            expect(myWorkflow.remove(testEmptyKey)).toBeInstanceOf(Promise);
-        });
-
-        it("emits an EventEmitter event", (done) => {
-            // arrange
-            myWorkflow.on(WorkflowEvents.Remove, () => {
-                // assert
-                done();
-            });
-
-            // act
-            myWorkflow.remove(testEmptyKey);
-        });
-
-    }); // remove
-
-    describe("load", () => {
-        it("returns a Promise", () => {
-            expect(myWorkflow.load(testEmptyKey)).toBeInstanceOf(Promise);
-        });
-
-        it("emits an EventEmitter event", (done) => {
-            // arrange
-            myWorkflow.on(WorkflowEvents.Load, () => {
-                // assert
-                done();
-            });
-
-            // act
-            myWorkflow.load(testEmptyKey);
-        });
-
-    }); // load
+    }); // addWorkflow
 
     describe("run", () => {
         it("emits an EventEmitter event", (done) => {
             // arrange
-            myWorkflow.on(WorkflowEvents.Run, () => {
+            manager.on(WorkflowEvents.Run, () => {
                 // assert
-                console.log(`Run was called`);
                 done();
             });
 
             // act
-            myWorkflow.run(testEmptyKey);
+            manager.run(testEmptyKey);
         });
 
         it("starts a pubsub listener and applies workflows to messages", (done) => {
             // arrange
-            myWorkflow.on(testEvent, () => {
-                console.log(`Test event fired!!!`);
+            manager.on(testEvent, () => {
+                // assert
                 done();
             });
 
             // act
-            myWorkflow.run(testKey);
-
-            setTimeout(() => {
-                client.publish(testKey, testEvent, (pubErr: Error, reply: number) => {
-                    console.log(`Published ${testEvent} to pubsub`);
-    
-                    // now kill it
-                    client.publish(testKey, testKillMessage, (killErr: Error, reply: number) => {
-                        console.log(`Published kill message`);
-                    });
+            manager.run(testKey)
+                .then(() => {
+                    setTimeout(() => {
+                        client.publish(testKey, testEvent, (pubErr: Error, _1: number) => {
+                            // now kill it
+                            client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
+                                // do nothing
+                            });
+                        });
+                    }, 2000);
+                })
+                .catch((error) => {
+                    done.fail(error);
                 });
-            }, 3000);
         });
 
     }); // run
 
     describe("stop", () => {
         it("returns a Promise", () => {
-            expect(myWorkflow.stop(testEmptyKey)).toBeInstanceOf(Promise);
+            expect(manager.stop(testEmptyKey)).toBeInstanceOf(Promise);
         });
 
         it("emits an EventEmitter event", (done) => {
             // arrange
-            myWorkflow.on(WorkflowEvents.Stop, () => {
+            manager.on(WorkflowEvents.Stop, () => {
                 // assert
                 done();
             });
 
             // act
-            myWorkflow.stop(testEmptyKey);
+            manager.stop(testEmptyKey);
         });
-
     }); // stop
 
 }); // redis workflow

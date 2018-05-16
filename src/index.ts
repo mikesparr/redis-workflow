@@ -5,16 +5,23 @@ import IAction from "./lib/IAction";
 import IRule from "./lib/IRule";
 import ITrigger from "./lib/ITrigger";
 import IWorkflow from "./lib/IWorkflow";
+import IWorkflowManager from "./lib/IWorkflowManager";
 import RedisConfig from "./lib/RedisConfig";
 import Rule from "./lib/Rule";
 import Trigger from "./lib/Trigger";
+import Workflow from "./lib/Workflow";
 
 export {
+    Action,
     IAction,
     IRule,
     ITrigger,
     IWorkflow,
+    IWorkflowManager,
     RedisConfig,
+    Rule,
+    Trigger,
+    Workflow,
 };
 
 export enum WorkflowEvents {
@@ -24,12 +31,14 @@ export enum WorkflowEvents {
     Load = "load",
     Run = "run",
     Stop = "stop",
-    Kill = "kill"
+    Kill = "kill",
 }
 
-export class RedisWorkflow extends EventEmitter implements IWorkflow {
+export class RedisWorkflowManager extends EventEmitter implements IWorkflowManager {
     protected client: redis.RedisClient;
     protected subscriber: redis.RedisClient;
+    protected workflows: IWorkflow[];
+
     protected readonly DEFAULT_REDIS_HOST: string = "localhost";
     protected readonly DEFAULT_REDIS_PORT: number = 6379;
     protected readonly PUBSUB_KILL_MESSAGE: string = "WFKILL";
@@ -72,82 +81,65 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
         }
     }
 
-    public add(channel: string, name: string, trigger: ITrigger, rules: [IRule], actions: [IAction]): Promise<void> {
+    public setWorkflows(workflows: IWorkflow[]): void {
+        this.workflows = workflows;
+    }
+
+    public getWorkflows(): IWorkflow[] {
+        return this.workflows;
+    }
+
+    public addWorkflow(channel: string, workflow: IWorkflow): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
-            if (typeof name !== "string") {
-                throw new TypeError("Name parameter must be a string");
+            if (typeof workflow !== "object") {
+                throw new TypeError("Workflow is required");
             }
-            if (trigger ! instanceof Trigger) {
-                throw new TypeError("Trigger parameter must be an ITrigger");
-            }
-            if (rules ! instanceof Array) {
-                throw new TypeError("Rules parameter must be an Array<IRule>");
-            }
-            if (actions ! instanceof Array) {
-                throw new TypeError("Actions parameter must be a Array<IAction>");
-            }
+
+            // add workflow or create if non-existant
+            this.workflows ? this.workflows.push(workflow) : this.workflows = [workflow];
 
             this.emit(WorkflowEvents.Add);
             resolve();
         });
     }
 
-    public remove(channel: string): Promise<void> {
+    public run(channel: string): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
 
-            this.emit(WorkflowEvents.Remove);
-            resolve();
+            // default handler
+            this.subscriber.on("message", (ch: string, message: string) => {
+                if (message === this.PUBSUB_KILL_MESSAGE) {
+                    this.subscriber.unsubscribe(channel);
+                    this.emit(WorkflowEvents.Kill);
+                } else {
+                    // parse message and extract event
+
+                    // if invalid event object, emit error
+
+                    // if valid trigger, apply condition and then emit action(s)
+
+                    this.emit(message); // test
+                }
+            });
+
+            // get all triggers, rules, actions for channel workflows
+
+            // start listener
+            this.subscriber.subscribe(channel, (err: Error, reply: string) => {
+                if (err !== null) {
+                    throw err;
+                }
+
+                this.emit(WorkflowEvents.Run);
+                resolve();
+            });
         });
-    }
-
-    public load(channel: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (typeof channel !== "string") {
-                throw new TypeError("Channel parameter must be a string");
-            }
-
-            this.emit(WorkflowEvents.Load);
-            resolve();
-        });
-    }
-
-    public run(channel: string): void {
-        if (typeof channel !== "string") {
-            throw new TypeError("Channel parameter must be a string");
-        }
-
-        // get all workflows for channel
-
-        // default handler
-        this.subscriber.on("message", (channel: string, message: string) => {
-            console.log({channel, message});
-
-            if (message === this.PUBSUB_KILL_MESSAGE) {
-                console.log(`Kill message detected. Shutting down...`);
-                this.subscriber.unsubscribe(channel);
-                this.emit(WorkflowEvents.Kill);
-                //process.exit(0);
-            } else {
-                // parse message and extract event
-
-                // if invalid event object, emit error
-
-                // if valid trigger, apply condition and then emit action(s)
-
-                console.log(`Received message ${message}`);
-                this.emit(message); // test
-            }
-        });
-
-        // start listener
-        this.emit(WorkflowEvents.Run);
-        this.subscriber.subscribe(channel);
     }
 
     public stop(channel: string): Promise<void> {
@@ -161,6 +153,17 @@ export class RedisWorkflow extends EventEmitter implements IWorkflow {
                 this.emit(WorkflowEvents.Stop);
                 resolve();
             });
+        });
+    }
+
+    protected loadWorkflowsFromDatabase(channel: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+
+            this.emit(WorkflowEvents.Load);
+            resolve();
         });
     }
 }
