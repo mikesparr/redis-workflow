@@ -94,7 +94,7 @@ const rule: IRule = new Rule("eventName", "myField == myValue");
 You define actions when building workflows. The action name will become an `EventEmitter` event you handle.
 
 ```typescript
-myWorkflow.on("eventName", () => {
+manager.on("eventName", () => {
     // handle action here
 });
 ```
