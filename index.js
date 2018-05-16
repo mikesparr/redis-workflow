@@ -11,7 +11,6 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var events_1 = require("events");
-var mozjexl = require("mozjexl");
 var redis = require("redis");
 var Action_1 = require("./lib/Action");
 exports.Action = Action_1.Action;
@@ -24,7 +23,6 @@ var Trigger_1 = require("./lib/Trigger");
 exports.Trigger = Trigger_1.default;
 var Workflow_1 = require("./lib/Workflow");
 exports.Workflow = Workflow_1.default;
-var el = new mozjexl.Jexl();
 var WorkflowEvents;
 (function (WorkflowEvents) {
     WorkflowEvents["Error"] = "error";
@@ -122,40 +120,20 @@ var RedisWorkflowManager = (function (_super) {
                     try {
                         var jsonMessage = JSON.parse(message);
                         var event_1 = jsonMessage.event, context_1 = jsonMessage.context;
-                        if (event_1 && context_1) {
-                            var activeFlow_1 = triggerMap[event_1];
-                            if (activeFlow_1) {
-                                var isValid_1 = true;
-                                var rulesJobs_1 = [];
-                                if (activeFlow_1.getRules() && activeFlow_1.getRules().length > 0) {
-                                    activeFlow_1.getRules().map(function (rule) {
-                                        if (rule && rule.getExpression()) {
-                                            rulesJobs_1.push(el.eval(rule.getExpression(), context_1));
-                                        }
-                                    });
-                                }
-                                Promise.all(rulesJobs_1)
-                                    .then(function (values) {
-                                    values.map(function (check) {
-                                        if (check !== true) {
-                                            isValid_1 = false;
-                                        }
-                                    });
-                                    if (isValid_1 && activeFlow_1.getActions() && activeFlow_1.getActions().length > 0) {
-                                        activeFlow_1.getActions().map(function (action) {
-                                            if (action && action.getName()) {
-                                                _this.emit(action.getName(), context_1);
-                                            }
-                                        });
-                                    }
+                        var activeFlow = (event_1 && context_1) ? triggerMap[event_1] : null;
+                        if (activeFlow) {
+                            activeFlow.getActionsForContext(context_1)
+                                .then(function (actions) {
+                                actions.map(function (action) {
+                                    _this.emit(action.getName() || "unknown", context_1);
                                 });
-                            }
-                            else {
-                                _this.emit(WorkflowEvents.Error, new TypeError("No trigger defined for event '" + event_1 + "'"));
-                            }
+                            })
+                                .catch(function (error) {
+                                _this.emit(WorkflowEvents.Error, error);
+                            });
                         }
                         else {
-                            _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid '{event, context}'"));
+                            _this.emit(WorkflowEvents.Error, new TypeError("No trigger defined for event '" + event_1 + "'"));
                         }
                     }
                     catch (error) {
@@ -163,7 +141,7 @@ var RedisWorkflowManager = (function (_super) {
                     }
                 }
                 else {
-                    _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid '{event, context}'"));
+                    _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid JSON '{event, context}'"));
                 }
             });
             _this.subscriber.subscribe(channel, function (err, reply) {

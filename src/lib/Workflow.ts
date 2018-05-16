@@ -1,3 +1,5 @@
+import * as mozjexl from "mozjexl";
+
 import IAction from "./IAction";
 import IRule from "./IRule";
 import ITrigger from "./ITrigger";
@@ -8,12 +10,16 @@ export default class Workflow implements IWorkflow {
     protected trigger: ITrigger;
     protected rules: IRule[];
     protected actions: IAction[];
+    protected evaluator: any;
 
     constructor(name: string, trigger: ITrigger, rules: IRule[], actions: IAction[]) {
         this.name = name;
         this.trigger = trigger;
         this.rules = rules;
         this.actions = actions;
+
+        // instantiate EL evaluator
+        this.evaluator = new mozjexl.Jexl();
     }
 
     public getName(): string {
@@ -54,6 +60,40 @@ export default class Workflow implements IWorkflow {
 
     public setActions(actions: IAction[]): void {
         this.actions = actions;
+    }
+
+    public getActionsForContext(context: {[key: string]: any}): Promise<IAction[]> {
+        return new Promise((resolve, reject) => {
+            let actionsToFire: IAction[] = [];
+            let isValid: boolean = true; // optimistic default
+            const rulesJobs: Array<Promise<any>> = [];
+
+            // apply rules expressions to context if applicable
+            if (this.rules && this.rules.length > 0) {
+                this.rules.map((rule) => {
+                    if (rule && rule.getExpression()) {
+                        rulesJobs.push(this.evaluator.eval(rule.getExpression(), context));
+                    }
+                });
+            }
+
+            // process all rules and if still valid, return actions
+            Promise.all(rulesJobs)
+                .then((values) => {
+                    // check for false
+                    values.map((check: boolean) => {
+                        if (check !== true) {
+                            isValid = false;
+                        }
+                    });
+
+                    if (isValid && this.actions && this.actions.length > 0) {
+                        actionsToFire = this.actions;
+                    }
+
+                    resolve(actionsToFire);
+                });
+        });
     }
 
     public addAction(action: IAction): void {

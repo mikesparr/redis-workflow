@@ -49,6 +49,12 @@ manager.on("myAction", (context) => {
     console.log({context}); // should see after pubsub event below
 });
 
+// add error handler
+manager.on("error", (error) => {
+    // handle errors here
+    console.error(`An error occurred: `, error);
+})
+
 // start workflow engine
 manager.start("myChannel");
 
