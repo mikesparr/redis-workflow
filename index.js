@@ -31,7 +31,7 @@ var WorkflowEvents;
     WorkflowEvents["Add"] = "add";
     WorkflowEvents["Remove"] = "remove";
     WorkflowEvents["Load"] = "load";
-    WorkflowEvents["Run"] = "run";
+    WorkflowEvents["Start"] = "start";
     WorkflowEvents["Stop"] = "stop";
     WorkflowEvents["Kill"] = "kill";
 })(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
@@ -97,7 +97,7 @@ var RedisWorkflowManager = (function (_super) {
             resolve();
         });
     };
-    RedisWorkflowManager.prototype.run = function (channel) {
+    RedisWorkflowManager.prototype.start = function (channel) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
@@ -170,7 +170,7 @@ var RedisWorkflowManager = (function (_super) {
                 if (err !== null) {
                     throw err;
                 }
-                _this.emit(WorkflowEvents.Run);
+                _this.emit(WorkflowEvents.Start);
                 resolve();
             });
         });
