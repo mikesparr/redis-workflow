@@ -34,7 +34,7 @@ export enum WorkflowEvents {
     Add = "add",
     Remove = "remove",
     Load = "load",
-    Run = "run",
+    Start = "start",
     Stop = "stop",
     Kill = "kill",
 }
@@ -115,7 +115,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
-    public run(channel: string): Promise<void> {
+    public start(channel: string): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
@@ -133,7 +133,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 }
             });
 
-            // default handler
+            // TODO: move logic to workflow class
             this.subscriber.on("message", (ch: string, message: string) => {
                 if (message === this.PUBSUB_KILL_MESSAGE) {
                     this.subscriber.unsubscribe(channel);
@@ -205,7 +205,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                     throw err;
                 }
 
-                this.emit(WorkflowEvents.Run);
+                this.emit(WorkflowEvents.Start);
                 resolve();
             });
         });

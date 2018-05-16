@@ -50,7 +50,7 @@ manager.on("myAction", (context) => {
 });
 
 // start workflow engine
-manager.run("myChannel");
+manager.start("myChannel");
 
 // publish a test object to the pubsub channel
 setTimeout(() => {
@@ -59,6 +59,11 @@ setTimeout(() => {
         console.log({err, reply});
     });
 }, 2500);
+
+// sometime later ...
+setTimeout(() => {
+    manager.stop("myChannel"); // unsubscribe from pubsub and stop emitting actions
+}, 5000);
 
 // note, if you publish an event and conditions do not == true, no action taken
 ```

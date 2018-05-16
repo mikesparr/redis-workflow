@@ -120,16 +120,16 @@ describe("RedisWorkflow", () => {
         });
     }); // addWorkflow
 
-    describe("run", () => {
+    describe("start", () => {
         it("emits an EventEmitter event", (done) => {
             // arrange
-            manager.on(WorkflowEvents.Run, () => {
+            manager.on(WorkflowEvents.Start, () => {
                 // assert
                 done();
             });
 
             // act
-            manager.run(testEmptyKey);
+            manager.start(testEmptyKey);
         });
 
         it("starts a pubsub listener and applies workflows to messages", (done) => {
@@ -144,7 +144,7 @@ describe("RedisWorkflow", () => {
             });
 
             // act
-            manager.run(testKey)
+            manager.start(testKey)
                 .then(() => {
                     setTimeout(() => {
                         client.publish(testKey, testEvent, (pubErr: Error, _1: number) => {
@@ -162,7 +162,7 @@ describe("RedisWorkflow", () => {
                 });
         });
 
-    }); // run
+    }); // start
 
     describe("stop", () => {
         it("returns a Promise", () => {
