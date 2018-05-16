@@ -3,6 +3,8 @@ import IRule from "./IRule";
 import ITrigger from "./ITrigger";
 
 export default interface IWorkflow {
+    getId(): string;
+    setId(id: string): void;
     getName(): string;
     setName(name: string): void;
     getTrigger(): ITrigger;

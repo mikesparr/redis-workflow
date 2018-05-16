@@ -13,8 +13,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var events_1 = require("events");
 var redis = require("redis");
 var Action_1 = require("./lib/Action");
-exports.Action = Action_1.Action;
 exports.ActionType = Action_1.ActionType;
+var DelayedAction_1 = require("./lib/DelayedAction");
+exports.DelayedAction = DelayedAction_1.default;
+var ImmediateAction_1 = require("./lib/ImmediateAction");
+exports.ImmediateAction = ImmediateAction_1.default;
 var RedisConfig_1 = require("./lib/RedisConfig");
 exports.RedisConfig = RedisConfig_1.default;
 var Rule_1 = require("./lib/Rule");
@@ -31,6 +34,7 @@ var WorkflowEvents;
     WorkflowEvents["Load"] = "load";
     WorkflowEvents["Start"] = "start";
     WorkflowEvents["Stop"] = "stop";
+    WorkflowEvents["Schedule"] = "schedule";
     WorkflowEvents["Kill"] = "kill";
 })(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
 var RedisWorkflowManager = (function (_super) {
@@ -125,7 +129,16 @@ var RedisWorkflowManager = (function (_super) {
                             activeFlow.getActionsForContext(context_1)
                                 .then(function (actions) {
                                 actions.map(function (action) {
-                                    _this.emit(action.getName() || "unknown", context_1);
+                                    if (action && action instanceof DelayedAction_1.default) {
+                                        action.setContext(context_1);
+                                        _this.emit(WorkflowEvents.Schedule, action);
+                                    }
+                                    else if (action && action instanceof ImmediateAction_1.default) {
+                                        _this.emit(action.getName() || "unknown", context_1);
+                                    }
+                                    else {
+                                        _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
+                                    }
                                 });
                             })
                                 .catch(function (error) {

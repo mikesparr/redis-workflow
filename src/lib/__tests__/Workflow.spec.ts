@@ -1,5 +1,7 @@
 import { Action, ActionType } from "../Action";
+import DelayedAction from "../DelayedAction";
 import IAction from "../IAction";
+import ImmediateAction from "../ImmediateAction";
 import IRule from "../IRule";
 import ITrigger from "../ITrigger";
 import IWorkflow from "../IWorkflow";
@@ -18,8 +20,8 @@ describe("Workflow", () => {
         const trigger: ITrigger = new Trigger("test.trigger101");
         const rule1: IRule = new Rule("Foo should equal bar", `foo == "bar"`);
         const rule2: IRule = new Rule("Should be in stock", "inStock > 0");
-        const action1: IAction = new Action("shipProduct", ActionType.Immediate);
-        const action2: IAction = new Action("adjustInventory", ActionType.Immediate);
+        const action1: IAction = new ImmediateAction("shipProduct");
+        const action2: IAction = new ImmediateAction("adjustInventory");
         const workflow: IWorkflow = new Workflow("test.workflow1", trigger, [rule1, rule2], [action1, action2]);
 
         const message: {[key: string]: any} = {

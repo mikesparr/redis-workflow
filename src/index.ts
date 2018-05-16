@@ -2,7 +2,9 @@ import { EventEmitter } from "events";
 import * as redis from "redis";
 
 import { Action, ActionType } from "./lib/Action";
+import DelayedAction from "./lib/DelayedAction";
 import IAction from "./lib/IAction";
+import ImmediateAction from "./lib/ImmediateAction";
 import IRule from "./lib/IRule";
 import ITrigger from "./lib/ITrigger";
 import IWorkflow from "./lib/IWorkflow";
@@ -13,9 +15,10 @@ import Trigger from "./lib/Trigger";
 import Workflow from "./lib/Workflow";
 
 export {
-    Action,
     ActionType,
+    DelayedAction,
     IAction,
+    ImmediateAction,
     IRule,
     ITrigger,
     IWorkflow,
@@ -27,13 +30,14 @@ export {
 };
 
 export enum WorkflowEvents {
-    Error = "error",
-    Add = "add",
-    Remove = "remove",
-    Load = "load",
-    Start = "start",
-    Stop = "stop",
-    Kill = "kill",
+    Error = "error", // fired when Error emitted
+    Add = "add", // fired when new workflow added
+    Remove = "remove", // fired when workflow removed
+    Load = "load", // fired when workflow loaded from db
+    Start = "start", // fired when manager started channel
+    Stop = "stop", // fired when manager stopped channel
+    Schedule = "schedule", // fired when actions are ActionType.Delay
+    Kill = "kill", // fired when channel stopped listening
 }
 
 export class RedisWorkflowManager extends EventEmitter implements IWorkflowManager {
@@ -147,8 +151,16 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                             activeFlow.getActionsForContext(context)
                                 .then((actions) => {
                                     actions.map((action) => {
-                                        // TODO: handle ActionType.Delayed
-                                        this.emit(action.getName() || "unknown", context);
+                                        if (action && action instanceof DelayedAction) {
+                                            action.setContext(context);
+                                            this.emit(WorkflowEvents.Schedule, action); // use any scheduler you want
+                                        } else if (action && action instanceof ImmediateAction) {
+                                            this.emit(action.getName() || "unknown", context);
+                                        } else {
+                                            this.emit(
+                                                WorkflowEvents.Error,
+                                                new TypeError("Action object was null"));
+                                        }
                                     });
                                 })
                                 .catch((error) => {

@@ -37,7 +37,7 @@ const manager = new flow.RedisWorkflowManager(config);
 // create first workflow
 const trigger = new flow.Trigger("myTrigger");
 const rule = new flow.Rule("myRule", "foo == bar");
-const action = new flow.Action("myAction", flow.ActionType.Immediate);
+const action = new flow.ImmediateAction("myAction");
 const workflow = new flow.Workflow("myWorkflow", trigger, [rule], [action]);
 
 // add workflow to manager
@@ -90,21 +90,36 @@ const publisher: redis.RedisClient = new redis.createClient(); // just for our e
 const trigger: flow.ITrigger = new flow.Trigger("test.trigger101");
 const rule1: flow.IRule = new flow.Rule("Foo should equal bar", `foo == "bar"`);
 const rule2: flow.IRule = new flow.Rule("Should be in stock", "inStock > 0");
-const action1: flow.IAction = new flow.Action("shipProduct", flow.ActionType.Immediate);
-const action2: flow.IAction = new flow.Action("adjustInventory", flow.ActionType.Immediate);
+const action1: flow.IAction = new flow.DelayedAction("shipProduct", null); // context added later when triggered
+const action2: flow.IAction = new flow.ImmediateAction("adjustInventory");
 const workflow: flow.IWorkflow = new flow.Workflow("test.workflow1", trigger, [rule1, rule2], [action1, action2]);
 
 // add first workflow to manager
 manager.setWorkflows(workflow);
 
-// create listeners for actions
-manager.on("shipProduct", (context) => {
-    // do something here
-    console.log(`Shipping product...`, context);
+// errors
+manager.on(WorkflowEvents.Error, (error) => {
+    console.error(`Something bad happened: `, error);
+})
+
+// delayed actions
+manager.on(WorkflowEvents.Schedule, (action) => {
+    // handle delayed actions how you like (use your own scheduler)
+    console.log(`Delayed action received!`);
+
+    switch (action.getName()) {
+        case "shipProduct":
+            // schedule with fulfillment
+            break;
+        default:
+            // add to cron
+            break;
+    }
 });
 
+// immediate actions (handler per action name)
 manager.on("adjustInventory", (context) => {
-    // do something else here
+    // do something here
     console.log(`Adjusting inventory for '${context.foo}' from ${context.inStock} to ${context.inStock - 1}`);
 });
 

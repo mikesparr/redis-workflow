@@ -5,7 +5,7 @@ export enum ActionType {
     Delayed,
 }
 
-export class Action implements IAction {
+export abstract class Action implements IAction {
     protected name: string;
     protected type: ActionType;
 

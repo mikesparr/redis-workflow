@@ -1,9 +1,10 @@
 import { EventEmitter } from "events";
 import * as redis from "redis";
 import {
-    Action,
     ActionType,
+    DelayedAction,
     IAction,
+    ImmediateAction,
     IRule,
     ITrigger,
     IWorkflow,
@@ -26,20 +27,29 @@ describe("RedisWorkflow", () => {
     const manager: IWorkflowManager = new RedisWorkflowManager(config);
 
     const testKey: string = "test123";
+    const testKey2: string = "test234";
     const testEmptyKey: string = "testEmptyKey999";
     const testKillMessage: string = "WFKILL"; // keep in sync with class
 
     const testEventName: string = "test_event_888";
+    const testEventName2: string = "test_event_2";
     const testEvent: string = JSON.stringify( {event: testEventName, context: {age: 77}} );
+    const testEvent2: string = JSON.stringify( {event: testEventName2, context: {age: 55}} );
     const testActionName: string = "test_action_999";
-    const testRuleName: string = "test_rule_000";
+    const testRuleName: string = "It is valid";
     const testRuleExpression: string = "age == 77";
+    const testRuleExpression2: string = "age == 55";
     const testWorkflowName: string = "test_workflow_1";
+    const testWorkflowName2: string = "test_workflow_2";
 
-    const testTrigger1: ITrigger = new Trigger(testEventName);
+    const testTrigger1: ITrigger = new Trigger(testEventName); // immediate
+    const testTrigger2: ITrigger = new Trigger(testEventName2); // delayed
     const testRule1: IRule = new Rule(testRuleName, testRuleExpression);
-    const testAction1: IAction = new Action(testActionName, ActionType.Immediate);
+    const testRule2: IRule = new Rule(testRuleName, testRuleExpression2);
+    const testAction1: IAction = new ImmediateAction(testActionName);
+    const testAction2: IAction = new DelayedAction(testActionName, null);
     const testWorkflow1: IWorkflow = new Workflow(testWorkflowName, testTrigger1, [testRule1], [testAction1]);
+    const testWorkflow2: IWorkflow = new Workflow(testWorkflowName2, testTrigger2, [testRule2], [testAction2]);
 
     const client: any = redis.createClient(); // for confirming app TODO: mock
 
@@ -56,7 +66,7 @@ describe("RedisWorkflow", () => {
         jest.setTimeout(10000); // 10 second timeout
 
         // add test workflow
-        manager.setWorkflows([testWorkflow1]);
+        manager.setWorkflows([testWorkflow1, testWorkflow2]);
         done();
     });
 
@@ -69,7 +79,7 @@ describe("RedisWorkflow", () => {
             const result: IWorkflow[] = manager.getWorkflows();
 
             // assert
-            expect(result.length).toEqual(1);
+            expect(result.length).toEqual(2);
             expect(result[0]).toBeInstanceOf(Workflow);
             done();
         });
@@ -78,11 +88,11 @@ describe("RedisWorkflow", () => {
     describe("setWorkflows", () => {
         it("replaces workflows with provided array", () => {
             // act
-            manager.setWorkflows([testWorkflow1]);
+            manager.setWorkflows([testWorkflow1, testWorkflow2]);
             const result: IWorkflow[] = manager.getWorkflows();
 
             // assert
-            expect(result.length).toEqual(1);
+            expect(result.length).toEqual(2);
             expect(result[0]).toBeInstanceOf(Workflow);
         });
     }); // getWorkflows
@@ -153,7 +163,37 @@ describe("RedisWorkflow", () => {
                                 client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
                                     // do nothing
                                 });
-                            }, 1000);
+                            }, 3000);
+                        });
+                    }, 1000);
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
+        });
+
+        it("starts a pubsub listener and emits delayed actions", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Schedule, (action) => {
+                // assert
+                done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
+            // act
+            manager.start(testKey2)
+                .then(() => {
+                    setTimeout(() => {
+                        client.publish(testKey2, testEvent2, (pubErr: Error, _1: number) => {
+                            // now kill it
+                            setTimeout(() => {
+                                client.publish(testKey2, testKillMessage, (killErr: Error, _2: number) => {
+                                    // do nothing
+                                });
+                            }, 3000);
                         });
                     }, 1000);
                 })

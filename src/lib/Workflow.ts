@@ -6,20 +6,33 @@ import ITrigger from "./ITrigger";
 import IWorkflow from "./IWorkflow";
 
 export default class Workflow implements IWorkflow {
+    protected id: string;
     protected name: string;
     protected trigger: ITrigger;
     protected rules: IRule[];
     protected actions: IAction[];
     protected evaluator: any;
 
-    constructor(name: string, trigger: ITrigger, rules: IRule[], actions: IAction[]) {
+    constructor(name: string, trigger: ITrigger, rules: IRule[], actions: IAction[], id?: string) {
         this.name = name;
         this.trigger = trigger;
         this.rules = rules;
         this.actions = actions;
 
+        if (id) {
+            this.id = id;
+        }
+
         // instantiate EL evaluator
         this.evaluator = new mozjexl.Jexl();
+    }
+
+    public getId(): string {
+        return this.id || null;
+    }
+
+    public setId(id: string): void {
+        this.id = id;
     }
 
     public getName(): string {
