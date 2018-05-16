@@ -2,9 +2,11 @@ import IRule from "./IRule";
 
 export default class Rule implements IRule {
     protected name: string;
+    protected expression: string;
 
-    constructor(name: string, expression: string, context?: any) {
-        // console.log(`Rule '${name}' initiated`);
+    constructor(name: string, expression: string) {
+        this.name = name;
+        this.expression = expression;
     }
 
     public getName(): string {
@@ -13,5 +15,13 @@ export default class Rule implements IRule {
 
     public setName(name: string): void {
         this.name = name;
+    }
+
+    public getExpression(): string {
+        return this.expression;
+    }
+
+    public setExpression(expression: string): void {
+        this.expression = expression;
     }
 }

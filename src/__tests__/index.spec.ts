@@ -1,6 +1,20 @@
 import { EventEmitter } from "events";
 import * as redis from "redis";
-import { IWorkflow, IWorkflowManager, RedisConfig, RedisWorkflowManager, Workflow, WorkflowEvents } from "../index";
+import {
+    Action,
+    ActionType,
+    IAction,
+    IRule,
+    ITrigger,
+    IWorkflow,
+    IWorkflowManager,
+    RedisConfig,
+    RedisWorkflowManager,
+    Rule,
+    Trigger,
+    Workflow,
+    WorkflowEvents,
+} from "../index";
 
 describe("RedisWorkflow", () => {
     const config: RedisConfig = new RedisConfig(
@@ -10,11 +24,22 @@ describe("RedisWorkflow", () => {
         null,
     );
     const manager: IWorkflowManager = new RedisWorkflowManager(config);
+
     const testKey: string = "test123";
-    const testEvent: string = "test_event_888";
-    const testKillMessage: string = "WFKILL"; // keep in sync with class
     const testEmptyKey: string = "testEmptyKey999";
-    const testName: string = "testWorkflow1";
+    const testKillMessage: string = "WFKILL"; // keep in sync with class
+
+    const testEventName: string = "test_event_888";
+    const testEvent: string = JSON.stringify( {event: testEventName, context: {age: 77}} );
+    const testActionName: string = "test_action_999";
+    const testRuleName: string = "test_rule_000";
+    const testRuleExpression: string = "age == 77";
+    const testWorkflowName: string = "test_workflow_1";
+
+    const testTrigger1: ITrigger = new Trigger(testEventName);
+    const testRule1: IRule = new Rule(testRuleName, testRuleExpression);
+    const testAction1: IAction = new Action(testActionName, ActionType.Immediate);
+    const testWorkflow1: IWorkflow = new Workflow(testWorkflowName, testTrigger1, [testRule1], [testAction1]);
 
     const client: any = redis.createClient(); // for confirming app TODO: mock
 
@@ -28,6 +53,10 @@ describe("RedisWorkflow", () => {
     }); // constructor
 
     beforeAll((done) => {
+        jest.setTimeout(10000); // 10 second timeout
+
+        // add test workflow
+        manager.setWorkflows([testWorkflow1]);
         done();
     });
 
@@ -37,32 +66,19 @@ describe("RedisWorkflow", () => {
 
     describe("getWorkflows", () => {
         it("returns array of workflows", (done) => {
-            // arrange
-            const testWf: IWorkflow = new Workflow("test", null, null, null);
+            const result: IWorkflow[] = manager.getWorkflows();
 
-            // act
-            manager.addWorkflow(testKey, testWf)
-                .then(() => {
-                    const result: IWorkflow[] = manager.getWorkflows();
-
-                    // assert
-                    expect(result.length).toEqual(1);
-                    expect(result[0]).toBeInstanceOf(Workflow);
-                    done();
-                })
-                .catch((error) => {
-                    done.fail(error);
-                });
+            // assert
+            expect(result.length).toEqual(1);
+            expect(result[0]).toBeInstanceOf(Workflow);
+            done();
         });
     }); // getWorkflows
 
     describe("setWorkflows", () => {
         it("replaces workflows with provided array", () => {
-            // arrange
-            const testWf: IWorkflow = new Workflow("test", null, null, null);
-
             // act
-            manager.setWorkflows([testWf]);
+            manager.setWorkflows([testWorkflow1]);
             const result: IWorkflow[] = manager.getWorkflows();
 
             // assert
@@ -73,7 +89,7 @@ describe("RedisWorkflow", () => {
 
     describe("addWorkflow", () => {
         it("returns a Promise", () => {
-            expect(manager.addWorkflow(testEmptyKey, null)).toBeInstanceOf(Promise);
+            expect(manager.addWorkflow(testEmptyKey, testWorkflow1)).toBeInstanceOf(Promise);
         });
 
         it("emits an EventEmitter event", (done) => {
@@ -84,7 +100,23 @@ describe("RedisWorkflow", () => {
             });
 
             // act
-            manager.addWorkflow(testEmptyKey, null);
+            manager.addWorkflow(testEmptyKey, testWorkflow1);
+        });
+
+        it("adds a workflow to the array of workflows", (done) => {
+            // act
+            manager.addWorkflow(testKey, testWorkflow1)
+                .then(() => {
+                    const result: IWorkflow[] = manager.getWorkflows(); // TODO: consider channel designation
+
+                    // assert
+                    expect(result.length).toBeGreaterThan(3);
+                    expect(result[1]).toBeInstanceOf(Workflow);
+                    done();
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
         });
     }); // addWorkflow
 
@@ -102,9 +134,13 @@ describe("RedisWorkflow", () => {
 
         it("starts a pubsub listener and applies workflows to messages", (done) => {
             // arrange
-            manager.on(testEvent, () => {
+            manager.on(testActionName, (context) => {
                 // assert
                 done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
             });
 
             // act
@@ -113,11 +149,13 @@ describe("RedisWorkflow", () => {
                     setTimeout(() => {
                         client.publish(testKey, testEvent, (pubErr: Error, _1: number) => {
                             // now kill it
-                            client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
-                                // do nothing
-                            });
+                            setTimeout(() => {
+                                client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
+                                    // do nothing
+                                });
+                            }, 1000);
                         });
-                    }, 2000);
+                    }, 1000);
                 })
                 .catch((error) => {
                     done.fail(error);

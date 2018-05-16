@@ -1,8 +1,5 @@
-import {EventEmitter} from "events";
-import IAction from "./Action";
+import { EventEmitter } from "events";
 import IWorkflow from "./IWorkflow";
-import Rule from "./Rule";
-import Trigger from "./Trigger";
 
 export default interface IWorkflowManager extends EventEmitter {
     setWorkflows(workflows: IWorkflow[]): void;

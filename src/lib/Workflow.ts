@@ -6,10 +6,10 @@ import IWorkflow from "./IWorkflow";
 export default class Workflow implements IWorkflow {
     protected name: string;
     protected trigger: ITrigger;
-    protected rules: [IRule];
-    protected actions: [IAction];
+    protected rules: IRule[];
+    protected actions: IAction[];
 
-    constructor(name: string, trigger: ITrigger, rules: [IRule], actions: [IAction]) {
+    constructor(name: string, trigger: ITrigger, rules: IRule[], actions: IAction[]) {
         this.name = name;
         this.trigger = trigger;
         this.rules = rules;
@@ -32,11 +32,11 @@ export default class Workflow implements IWorkflow {
         this.trigger = trigger;
     }
 
-    public getRules(): [IRule] {
-        return this.rules;
+    public getRules(): IRule[] {
+        return this.rules || [];
     }
 
-    public setRules(rules: [IRule]): void {
+    public setRules(rules: IRule[]): void {
         this.rules = rules;
     }
 
@@ -44,15 +44,23 @@ export default class Workflow implements IWorkflow {
         this.rules.push(rule);
     }
 
-    public getActions(): [IAction] {
-        return this.actions;
+    public removeRule(name: string): void {
+        this.rules = this.rules.filter((rule) => rule.getName() !== name);
     }
 
-    public setActions(actions: [IAction]): void {
+    public getActions(): IAction[] {
+        return this.actions || [];
+    }
+
+    public setActions(actions: IAction[]): void {
         this.actions = actions;
     }
 
     public addAction(action: IAction): void {
         this.actions.push(action);
+    }
+
+    public removeAction(name: string): void {
+        this.actions = this.actions.filter((action) => action.getName() !== name);
     }
 }

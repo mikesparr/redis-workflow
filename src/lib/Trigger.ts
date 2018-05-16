@@ -4,7 +4,7 @@ export default class Trigger implements ITrigger {
     protected name: string;
 
     constructor(name: string) {
-        // console.log(`Trigger '${name}' initiated`);
+        this.name = name;
     }
 
     public getName(): string {

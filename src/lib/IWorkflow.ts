@@ -7,10 +7,12 @@ export default interface IWorkflow {
     setName(name: string): void;
     getTrigger(): ITrigger;
     setTrigger(trigger: ITrigger): void;
-    getRules(): [IRule];
-    setRules(rules: [IRule]): void;
+    getRules(): IRule[];
+    setRules(rules: IRule[]): void;
     addRule(rule: IRule): void;
-    getActions(): [IAction];
-    setActions(actions: [IAction]): void;
+    removeRule(name: string): void;
+    getActions(): IAction[];
+    setActions(actions: IAction[]): void;
     addAction(action: IAction): void;
+    removeAction(name: string): void;
 }

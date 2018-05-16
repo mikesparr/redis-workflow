@@ -11,9 +11,11 @@ var __extends = (this && this.__extends) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 var events_1 = require("events");
+var mozjexl = require("mozjexl");
 var redis = require("redis");
 var Action_1 = require("./lib/Action");
-exports.Action = Action_1.default;
+exports.Action = Action_1.Action;
+exports.ActionType = Action_1.ActionType;
 var RedisConfig_1 = require("./lib/RedisConfig");
 exports.RedisConfig = RedisConfig_1.default;
 var Rule_1 = require("./lib/Rule");
@@ -22,6 +24,7 @@ var Trigger_1 = require("./lib/Trigger");
 exports.Trigger = Trigger_1.default;
 var Workflow_1 = require("./lib/Workflow");
 exports.Workflow = Workflow_1.default;
+var el = new mozjexl.Jexl();
 var WorkflowEvents;
 (function (WorkflowEvents) {
     WorkflowEvents["Error"] = "error";
@@ -72,10 +75,13 @@ var RedisWorkflowManager = (function (_super) {
         return _this;
     }
     RedisWorkflowManager.prototype.setWorkflows = function (workflows) {
+        if (typeof workflows !== "object") {
+            throw new TypeError("Workflows are required");
+        }
         this.workflows = workflows;
     };
     RedisWorkflowManager.prototype.getWorkflows = function () {
-        return this.workflows;
+        return this.workflows || [];
     };
     RedisWorkflowManager.prototype.addWorkflow = function (channel, workflow) {
         var _this = this;
@@ -97,13 +103,67 @@ var RedisWorkflowManager = (function (_super) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
+            var triggerMap = {};
+            _this.workflows.map(function (flow) {
+                if (flow &&
+                    flow !== null &&
+                    flow.getTrigger() !== null &&
+                    flow.getTrigger().getName() !== null &&
+                    flow.getTrigger().getName() !== undefined) {
+                    triggerMap[flow.getTrigger().getName()] = flow;
+                }
+            });
             _this.subscriber.on("message", function (ch, message) {
                 if (message === _this.PUBSUB_KILL_MESSAGE) {
                     _this.subscriber.unsubscribe(channel);
                     _this.emit(WorkflowEvents.Kill);
                 }
+                else if (message && typeof message === "string") {
+                    try {
+                        var jsonMessage = JSON.parse(message);
+                        var event_1 = jsonMessage.event, context_1 = jsonMessage.context;
+                        if (event_1 && context_1) {
+                            var activeFlow_1 = triggerMap[event_1];
+                            if (activeFlow_1) {
+                                var isValid_1 = true;
+                                var rulesJobs_1 = [];
+                                if (activeFlow_1.getRules() && activeFlow_1.getRules().length > 0) {
+                                    activeFlow_1.getRules().map(function (rule) {
+                                        if (rule && rule.getExpression()) {
+                                            rulesJobs_1.push(el.eval(rule.getExpression(), context_1));
+                                        }
+                                    });
+                                }
+                                Promise.all(rulesJobs_1)
+                                    .then(function (values) {
+                                    values.map(function (check) {
+                                        if (check !== true) {
+                                            isValid_1 = false;
+                                        }
+                                    });
+                                    if (isValid_1 && activeFlow_1.getActions() && activeFlow_1.getActions().length > 0) {
+                                        activeFlow_1.getActions().map(function (action) {
+                                            if (action && action.getName()) {
+                                                _this.emit(action.getName(), context_1);
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                            else {
+                                _this.emit(WorkflowEvents.Error, new TypeError("No trigger defined for event '" + event_1 + "'"));
+                            }
+                        }
+                        else {
+                            _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid '{event, context}'"));
+                        }
+                    }
+                    catch (error) {
+                        _this.emit(WorkflowEvents.Error, error);
+                    }
+                }
                 else {
-                    _this.emit(message);
+                    _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid '{event, context}'"));
                 }
             });
             _this.subscriber.subscribe(channel, function (err, reply) {

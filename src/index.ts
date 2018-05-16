@@ -1,6 +1,8 @@
 import { EventEmitter } from "events";
+import * as mozjexl from "mozjexl";
 import * as redis from "redis";
-import Action from "./lib/Action";
+
+import { Action, ActionType } from "./lib/Action";
 import IAction from "./lib/IAction";
 import IRule from "./lib/IRule";
 import ITrigger from "./lib/ITrigger";
@@ -11,8 +13,11 @@ import Rule from "./lib/Rule";
 import Trigger from "./lib/Trigger";
 import Workflow from "./lib/Workflow";
 
+const el = new mozjexl.Jexl();
+
 export {
     Action,
+    ActionType,
     IAction,
     IRule,
     ITrigger,
@@ -82,11 +87,15 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
     }
 
     public setWorkflows(workflows: IWorkflow[]): void {
+        if (typeof workflows !== "object") {
+            throw new TypeError("Workflows are required");
+        }
+
         this.workflows = workflows;
     }
 
     public getWorkflows(): IWorkflow[] {
-        return this.workflows;
+        return this.workflows || [];
     }
 
     public addWorkflow(channel: string, workflow: IWorkflow): Promise<void> {
@@ -112,23 +121,83 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 throw new TypeError("Channel parameter must be a string");
             }
 
+            // store workflows by trigger name (only if valid trigger name)
+            const triggerMap: {[key: string]: IWorkflow} = {};
+            this.workflows.map((flow) => {
+                if (flow &&
+                    flow !== null &&
+                    flow.getTrigger() !== null &&
+                    flow.getTrigger().getName() !== null &&
+                    flow.getTrigger().getName() !== undefined) {
+                        triggerMap[flow.getTrigger().getName()] = flow;
+                }
+            });
+
             // default handler
             this.subscriber.on("message", (ch: string, message: string) => {
                 if (message === this.PUBSUB_KILL_MESSAGE) {
                     this.subscriber.unsubscribe(channel);
                     this.emit(WorkflowEvents.Kill);
-                } else {
+                } else if (message && typeof message === "string") {
                     // parse message and extract event
+                    try {
+                        const jsonMessage: any = JSON.parse(message);
+                        const { event, context } = jsonMessage;
 
-                    // if invalid event object, emit error
+                        if (event && context) {
+                            // get workflow from map based on event name
+                            const activeFlow: IWorkflow = triggerMap[event];
 
-                    // if valid trigger, apply condition and then emit action(s)
+                            if (activeFlow) {
+                                let isValid: boolean = true; // optimistic default
+                                const rulesJobs: Array<Promise<any>> = [];
 
-                    this.emit(message); // test
+                                // apply rules to context if applicable
+                                if (activeFlow.getRules() && activeFlow.getRules().length > 0) {
+                                    activeFlow.getRules().map((rule) => {
+                                        if (rule && rule.getExpression()) {
+                                            rulesJobs.push(el.eval(rule.getExpression(), context));
+                                        }
+                                    });
+                                }
+
+                                Promise.all(rulesJobs)
+                                    .then((values) => {
+                                        // check for false
+                                        values.map((check: boolean) => {
+                                            if (check !== true) {
+                                                isValid = false;
+                                            }
+                                        });
+
+                                        if (isValid && activeFlow.getActions() && activeFlow.getActions().length > 0) {
+                                            activeFlow.getActions().map((action) => {
+                                                // TODO: check type and schedule delayed actions
+                                                if (action && action.getName()) {
+                                                    this.emit(action.getName(), context);
+                                                }
+                                            });
+                                        }
+                                    });
+                            } else {
+                                this.emit(
+                                    WorkflowEvents.Error,
+                                    new TypeError(`No trigger defined for event '${event}'`));
+                            }
+                        } else {
+                            this.emit(
+                                WorkflowEvents.Error,
+                                new TypeError(`Message ${message} is not valid '{event, context}'`));
+                        }
+                    } catch (error) {
+                        this.emit(WorkflowEvents.Error, error);
+                    }
+                } else {
+                    this.emit(
+                        WorkflowEvents.Error,
+                        new TypeError(`Message ${message} is not valid '{event, context}'`));
                 }
             });
-
-            // get all triggers, rules, actions for channel workflows
 
             // start listener
             this.subscriber.subscribe(channel, (err: Error, reply: string) => {
