@@ -87,7 +87,7 @@ The `message` published to the topic will include a stringified JSON object as f
 Uses `mozjexl` Javascript expression language to evaluate string expressions, evaluating to `true` or `false`.
 
 ```typescript
-const rule: IRule = new Rule("eventName", "myField == myValue");
+const rule: IRule = new Rule("Field must be valid", "myField == myValue");
 ```
 
 ## Actions
