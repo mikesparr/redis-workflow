@@ -75,7 +75,64 @@ setTimeout(() => {
 ```
 
 ## Typescript
-TODO
+See more detailed examples in the respective `src/__tests__` and `src/lib/__tests__` folders.
+
+### Example with multiple rules and actions for a workflow
+```typescript
+import * as redis from "redis";
+import * as flow from "redis-workflow"; // optionally import each class (see __tests__)
+
+const config: flow.RedisConfig = new flow.RedisConfig("localhost", 6379, null, null);
+const manager: flow.IWorkflowManager = new flow.RedisWorkflowManager(config);
+const publisher: redis.RedisClient = new redis.createClient(); // just for our example to pubsub message
+
+// build test workflow
+const trigger: flow.ITrigger = new flow.Trigger("test.trigger101");
+const rule1: flow.IRule = new flow.Rule("Foo should equal bar", `foo == "bar"`);
+const rule2: flow.IRule = new flow.Rule("Should be in stock", "inStock > 0");
+const action1: flow.IAction = new flow.Action("shipProduct", flow.ActionType.Immediate);
+const action2: flow.IAction = new flow.Action("adjustInventory", flow.ActionType.Immediate);
+const workflow: flow.IWorkflow = new flow.Workflow("test.workflow1", trigger, [rule1, rule2], [action1, action2]);
+
+// add first workflow to manager
+manager.setWorkflows(workflow);
+
+// create listeners for actions
+manager.on("shipProduct", (context) => {
+    // do something here
+    console.log(`Shipping product...`, context);
+});
+
+manager.on("adjustInventory", (context) => {
+    // do something else here
+    console.log(`Adjusting inventory for '${context.foo}' from ${context.inStock} to ${context.inStock - 1}`);
+});
+
+// start manager (subscribes to pubsub channel)
+manager.start("babyDivision")
+    .then(() => {
+        // do something if you like
+    });
+
+// build and publish trigger events to Redis pubsub channel
+const message: {[key: string]: any} = {
+    context: {
+        foo: "bar",
+        inStock: 3,
+    },
+    event: "test.trigger101",
+};
+
+// simulate time after manager starts before triggers appear
+setTimeout(() => {
+    publisher.publish("babyDivision", JSON.stringify(message), (err: Error, reply: any) => {
+        // simulate time later shutting down workflow channel
+        setTimeout(() => {
+            manager.stop("babyDivision");
+        }, 5000);
+    });
+}, 3000);
+```
 
 ## Triggers
 Uses Redis `pubsub` listening for events to start workflow.
