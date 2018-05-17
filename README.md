@@ -90,7 +90,7 @@ const publisher: redis.RedisClient = new redis.createClient(); // just for our e
 const trigger: flow.ITrigger = new flow.Trigger("test.trigger101");
 const rule1: flow.IRule = new flow.Rule("Foo should equal bar", `foo == "bar"`);
 const rule2: flow.IRule = new flow.Rule("Should be in stock", "inStock > 0");
-const action1: flow.IAction = new flow.DelayedAction("shipProduct", null); // context added later when triggered
+const action1: flow.IAction = new flow.DelayedAction("shipProduct").delay(5, "days"); // context added later when triggered
 const action2: flow.IAction = new flow.ImmediateAction("adjustInventory");
 const workflow: flow.IWorkflow = new flow.Workflow("test.workflow1", trigger, [rule1, rule2], [action1, action2]);
 

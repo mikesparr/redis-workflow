@@ -47,7 +47,7 @@ describe("RedisWorkflow", () => {
     const testRule1: IRule = new Rule(testRuleName, testRuleExpression);
     const testRule2: IRule = new Rule(testRuleName, testRuleExpression2);
     const testAction1: IAction = new ImmediateAction(testActionName);
-    const testAction2: IAction = new DelayedAction(testActionName, null);
+    const testAction2: IAction = new DelayedAction(testActionName).delay(1, "day").repeat(3);
     const testWorkflow1: IWorkflow = new Workflow(testWorkflowName, testTrigger1, [testRule1], [testAction1]);
     const testWorkflow2: IWorkflow = new Workflow(testWorkflowName2, testTrigger2, [testRule2], [testAction2]);
 
