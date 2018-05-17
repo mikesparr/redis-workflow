@@ -36,6 +36,7 @@ var WorkflowEvents;
     WorkflowEvents["Stop"] = "stop";
     WorkflowEvents["Schedule"] = "schedule";
     WorkflowEvents["Immediate"] = "immediate";
+    WorkflowEvents["Audit"] = "audit";
     WorkflowEvents["Kill"] = "kill";
 })(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
 var RedisWorkflowManager = (function (_super) {
@@ -134,10 +135,12 @@ var RedisWorkflowManager = (function (_super) {
                                     if (action && action instanceof DelayedAction_1.default) {
                                         _this.emit(action.getName(), action);
                                         _this.emit(WorkflowEvents.Schedule, action);
+                                        _this.emit(WorkflowEvents.Audit, action);
                                     }
                                     else if (action && action instanceof ImmediateAction_1.default) {
                                         _this.emit(action.getName(), action);
                                         _this.emit(WorkflowEvents.Immediate, action);
+                                        _this.emit(WorkflowEvents.Audit, action);
                                     }
                                     else {
                                         _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
