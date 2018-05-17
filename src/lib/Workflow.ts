@@ -75,7 +75,7 @@ export default class Workflow implements IWorkflow {
         this.actions = actions;
     }
 
-    public getActionsForContext(context: {[key: string]: any}): Promise<IAction[]> {
+    public getActionsForContext(context: Dictionary): Promise<IAction[]> {
         return new Promise((resolve, reject) => {
             let actionsToFire: IAction[] = [];
             let isValid: boolean = true; // optimistic default

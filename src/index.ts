@@ -59,7 +59,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
             this.subscriber = client;
         } else {
             // build properties for instantiating Redis
-            const options: {[key: string]: any} = {
+            const options: Dictionary = {
                 host: config.host || this.DEFAULT_REDIS_HOST,
                 port: config.port || this.DEFAULT_REDIS_PORT,
                 retry_strategy: (status: any) => {

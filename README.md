@@ -1,6 +1,6 @@
 # Redis Workflow
 Dynamic rules engine to allow configurable workflow in app without requiring code changes. 
-Using Redis as backing service, you can design workflows and whenever you `run(channel)` your workflow, 
+Using Redis as backing service, you can design workflows and whenever you `start` your workflow, 
 it will load your stored workflow(s) then attach a `pubsub` listener to Redis. Any time your 
 `pubsub` channel message appears, it will parse the event object, perform conditional logic, and if true 
 emit one or more defined actions.
@@ -44,9 +44,9 @@ const workflow = new flow.Workflow("myWorkflow", trigger, [rule], [action]);
 manager.setWorkflows([workflow]);
 
 // add listener for action
-manager.on("myAction", (context) => {
+manager.on("myAction", (action) => {
     // perform something here
-    console.log({context}); // should see after pubsub event below
+    console.log({action}); // should see after pubsub event below
 });
 
 // add error handler

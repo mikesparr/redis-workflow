@@ -15,7 +15,7 @@ export default interface IWorkflow {
     removeRule(name: string): void;
     getActions(): IAction[];
     setActions(actions: IAction[]): void;
-    getActionsForContext(context: {[key: string]: any}): Promise<IAction[]>;
+    getActionsForContext(context: Dictionary): Promise<IAction[]>;
     addAction(action: IAction): void;
     removeAction(name: string): void;
 }

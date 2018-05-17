@@ -7,7 +7,7 @@ export enum ActionType {
 }
 
 export abstract class Action implements IAction {
-    protected context: {[key: string]: any};
+    protected context: Dictionary;
     protected name: string;
     protected type: ActionType;
 
@@ -21,11 +21,11 @@ export abstract class Action implements IAction {
         return this;
     }
 
-    public getContext(): {[key: string]: any} {
+    public getContext(): Dictionary {
         return this.context;
     }
 
-    public setContext(obj: {[key: string]: any}): IAction {
+    public setContext(obj: Dictionary): IAction {
         if (!obj || typeof obj !== "object") {
             throw new TypeError("Context must be a valid object");
         }

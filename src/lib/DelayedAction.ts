@@ -8,13 +8,12 @@ export default class DelayedAction extends Action {
 
     constructor(name: string,
                 intervalAsMillis?: number,
-                context?: {[key: string]: any},
+                context?: Dictionary,
                 delayAsTimestamp?: number,
                 repeat?: boolean) {
 
-        if (!name || typeof name !== "string") {
-            throw new TypeError("Name must be a valid string");
-        } // redundant
+        // valid name check in super
+
         if (intervalAsMillis && typeof intervalAsMillis !== "number") {
             throw new TypeError("Interval must be a valid number");
         }
@@ -66,7 +65,11 @@ export default class DelayedAction extends Action {
     }
 
     public getIntervalAsMilliseconds(): number {
-        return this.interval || 0;
+        return this.interval;
+    }
+
+    public getRecurrences(): number {
+        return this.recurrences;
     }
 
     public isRepeat(): boolean {
