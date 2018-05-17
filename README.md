@@ -117,10 +117,32 @@ manager.on(WorkflowEvents.Schedule, (action) => {
     }
 });
 
-// immediate actions (handler per action name)
-manager.on("adjustInventory", (context) => {
+// immediate actions
+manager.on(WorkflowEvents.Immediate, (action) => {
+    // handle immediate actions
+    console.log(`Immediate action received!`);
+
+    switch (action.getName()) {
+        case "adjustInventory":
+            // task inventory management
+            break;
+        default:
+            // global handler or notification
+            break;
+    }
+});
+
+// optionally handle actions by name
+manager.on("adjustInventory", (action) => {
     // do something here
-    console.log(`Adjusting inventory for '${context.foo}' from ${context.inStock} to ${context.inStock - 1}`);
+    const item: string = action.getContext().foo;
+    const inStock: number = action.getContext().inStock;
+    console.log(`Adjusting inventory for '${item}' from ${inStock} to ${inStock - 1}`);
+});
+
+// optionally handle global actions (all types)
+manager.on(WorkflowEvents.Audit, (action) => {
+    // publish action to stream pipeline
 });
 
 // start manager (subscribes to pubsub channel)

@@ -14,7 +14,7 @@ export default class DelayedAction extends Action {
 
         if (!name || typeof name !== "string") {
             throw new TypeError("Name must be a valid string");
-        }
+        } // redundant
         if (intervalAsMillis && typeof intervalAsMillis !== "number") {
             throw new TypeError("Interval must be a valid number");
         }
@@ -139,16 +139,7 @@ export default class DelayedAction extends Action {
         return this;
     }
 
-    public addContext(obj: {[key: string]: any}): DelayedAction {
-        if (!obj || typeof obj !== "object") {
-            throw new TypeError("Context must be a valid object");
-        }
-
-        this.setContext(obj);
-        return this;
-    }
-
-    public setDelayFrom(timestamp?: number): DelayedAction {
+    public setScheduledDateFrom(timestamp?: number): DelayedAction {
         this.scheduledAt = this.calcDelayAsTimestamp(timestamp);
         return this;
     }

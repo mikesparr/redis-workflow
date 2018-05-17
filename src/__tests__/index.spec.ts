@@ -202,6 +202,36 @@ describe("RedisWorkflow", () => {
                 });
         });
 
+        it("starts a pubsub listener and emits immediate actions", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Immediate, (context) => {
+                // assert
+                done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
+            // act
+            manager.start(testKey)
+                .then(() => {
+                    setTimeout(() => {
+                        client.publish(testKey, testEvent, (pubErr: Error, _1: number) => {
+                            // now kill it
+                            setTimeout(() => {
+                                client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
+                                    // do nothing
+                                });
+                            }, 3000);
+                        });
+                    }, 1000);
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
+        });
+
     }); // start
 
     describe("stop", () => {

@@ -37,6 +37,8 @@ export enum WorkflowEvents {
     Start = "start", // fired when manager started channel
     Stop = "stop", // fired when manager stopped channel
     Schedule = "schedule", // fired when actions are ActionType.Delay
+    Immediate = "immediate", // fired when actions are ActionType.Immediate
+    Audit = "audit", // fired for all actions
     Kill = "kill", // fired when channel stopped listening
 }
 
@@ -151,11 +153,16 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                             activeFlow.getActionsForContext(context)
                                 .then((actions) => {
                                     actions.map((action) => {
+                                        action.setContext(context);
+
                                         if (action && action instanceof DelayedAction) {
-                                            action.setContext(context);
+                                            this.emit(action.getName(), action); // optionally listen for action by name
                                             this.emit(WorkflowEvents.Schedule, action); // use any scheduler you want
+                                            this.emit(WorkflowEvents.Audit, action); // global handler
                                         } else if (action && action instanceof ImmediateAction) {
-                                            this.emit(action.getName() || "unknown", context);
+                                            this.emit(action.getName(), action); // optionally listen for action by name
+                                            this.emit(WorkflowEvents.Immediate, action); // handle with default
+                                            this.emit(WorkflowEvents.Audit, action); // global handler
                                         } else {
                                             this.emit(
                                                 WorkflowEvents.Error,
