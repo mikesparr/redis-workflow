@@ -36,6 +36,7 @@ export enum WorkflowEvents {
     Load = "load", // fired when workflow loaded from db
     Save = "save", // fired when workflow saved in db
     Delete = "delete", // fired when workflow deleted from db
+    Ready = "ready", // fired when manager instantiated
     Start = "start", // fired when manager started channel
     Stop = "stop", // fired when manager stopped channel
     Reset = "reset", // fired when reset
@@ -54,8 +55,18 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
     protected readonly DEFAULT_REDIS_PORT: number = 6379;
     protected readonly PUBSUB_KILL_MESSAGE: string = "WFKILL";
 
-    constructor(config: RedisConfig, client?: redis.RedisClient) {
+    constructor(config: RedisConfig, client?: redis.RedisClient, channels?: string[]) {
         super();
+
+        if (config && typeof config !== "object") {
+            throw new TypeError("Config must be null or a valid RedisConfig");
+        }
+        if (client && typeof client !== "object") {
+            throw new TypeError("Client must be null or a valid RedisClient");
+        }
+        if (channels && channels.length === 0) {
+            throw new TypeError("Channels must be valid array of at least one string");
+        }
 
         if (client && client instanceof redis.RedisClient) {
             this.client = client;
@@ -67,13 +78,11 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 port: config.port || this.DEFAULT_REDIS_PORT,
                 retry_strategy: (status: any) => {
                     if (status.error && status.error.code === "ECONNREFUSED") {
-                        // End reconnecting on a specific error and flush all commands with
-                        // a individual error
+                        // End reconnecting on a specific error and flush all commands
                         return new Error("The server refused the connection");
                     }
                     if (status.total_retry_time > 1000 * 60 * 60) {
                         // End reconnecting after a specific timeout and flush all commands
-                        // with a individual error
                         return new Error("Retry time exhausted");
                     }
                     if (status.attempt > 10) {
@@ -93,6 +102,21 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
 
         // initiate workflows hash
         this.workflows = {};
+
+        // check if channels declared, and load from db
+        if (channels) {
+            const jobs: Array<Promise<void>> = [];
+
+            channels.map((ch) => {
+                jobs.push(this.loadWorkflowsFromDatabase(ch));
+            });
+
+            // process them
+            Promise.all(jobs)
+                .then((values: any[]) => {
+                    this.emit(WorkflowEvents.Ready);
+                });
+        }
     }
 
     public setWorkflows(workflows: Dictionary): void {
@@ -203,7 +227,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 if (ch === channel) {
                     if (message === this.PUBSUB_KILL_MESSAGE) {
                         this.subscriber.unsubscribe(channel);
-                        this.emit(WorkflowEvents.Kill);
+                        this.emit(WorkflowEvents.Kill, channel);
                     } else if (message && typeof message === "string") {
                         // parse message and extract event
                         try {
@@ -285,6 +309,12 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
 
     public reset(channel?: string): Promise<void> {
         return new Promise((resolve, reject) => {
+            // TODO:
+            // loop through workflows (by channel if set)
+            // forEach
+                // remove from db
+                // remove from memory
+
             this.emit(WorkflowEvents.Reset);
             resolve();
         });
@@ -336,14 +366,19 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
+    /* tslint:disable */
     protected hash(str: string): number {
         let hash: number = 0;
-        if (str.length === 0) { return hash; }
-        for (let i = 0; i < str.length; i++) {
-            const char: number = str.charCodeAt(i);
-            hash = ((hash<<5)-hash)+char;
-            hash = hash & hash; // Convert to 32bit integer
+        const strlen: number = str.length;
+
+        if (strlen === 0) { return hash; }
+
+        for (let i = 0; i < strlen; ++i) {
+            const code: number = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + code;
+            hash &= hash; // Int32
         }
-        return hash;
+        return (hash >>> 0); // uInt32
     }
+    /* tslint:enable */
 }

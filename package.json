@@ -1,7 +1,7 @@
 {
   "name": "redis-workflow",
   "version": "0.4.1",
-  "description": "Simple promise based workflow rules engine using Redis backing",
+  "description": "Simple Promise based multi-channel workflow rules engine using Redis backing",
   "main": "index.js",
   "scripts": {
     "build": "./node_modules/.bin/tsc",

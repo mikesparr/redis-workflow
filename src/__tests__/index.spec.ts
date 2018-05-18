@@ -19,7 +19,7 @@ import {
     WorkflowEvents,
 } from "../index";
 
-describe("RedisWorkflow", () => {
+describe("RedisWorkflowManager", () => {
     const config: RedisConfig = new RedisConfig(
         "localhost",
         6379,
@@ -39,7 +39,9 @@ describe("RedisWorkflow", () => {
     const testEvent: string = JSON.stringify( {event: testEventName, context: {age: 77}} );
     const testEvent2: string = JSON.stringify( {event: testEventName2, context: {age: 55}} );
     const testActionName: string = "test_action_999";
-    const testRuleName: string = "It is valid";
+    const testActionName2: string = "test_action_000";
+    const testRuleName: string = "Is retired";
+    const testRuleName2: string = "Is a grandparent";
     const testRuleExpression: string = "age == 77";
     const testRuleExpression2: string = "age == 55";
     const testWorkflowName: string = "test_workflow_1";
@@ -56,15 +58,6 @@ describe("RedisWorkflow", () => {
 
     const client: any = redis.createClient(); // for confirming app TODO: mock
 
-    it("instantiates a Workflow", () => {
-        expect(manager).toBeInstanceOf(RedisWorkflowManager);
-    }); // constructor
-
-    it("uses existing RedisClient if passed", () => {
-        const workflowWithClient: IWorkflowManager = new RedisWorkflowManager(null, client);
-        expect(workflowWithClient).toBeInstanceOf(RedisWorkflowManager);
-    }); // constructor
-
     beforeAll((done) => {
         jest.setTimeout(6000); // 6 second timeout
 
@@ -75,12 +68,67 @@ describe("RedisWorkflow", () => {
             [testKey3]: [testWorkflow1, testWorkflow2],
             [testEmptyKey]: [],
         });
+
+        // add persisted workflow for channel
+
         done();
     });
 
     afterAll((done) => {
+        // TODO: remove workflow set for channels, and workflows
         done();
     });
+
+    it("instantiates a WorkflowManager", () => {
+        expect(manager).toBeInstanceOf(RedisWorkflowManager);
+    }); // constructor
+
+    it("uses existing RedisClient if passed", () => {
+        const workflowWithClient: IWorkflowManager = new RedisWorkflowManager(null, client);
+        expect(workflowWithClient).toBeInstanceOf(RedisWorkflowManager);
+    }); // constructor
+
+    it("loads workflows from database if channels provided", (done) => {
+        // arrange
+        const testDict: Dictionary = {
+            name: testWorkflowName,
+            trigger: {
+                name: testEventName,
+            },
+            rules: [
+                {
+                    name: testRuleName,
+                    expression: testRuleExpression,
+                }
+            ],
+            actions: [
+                {
+                    name: testActionName,
+                    type: ActionType.Immediate,
+                }
+            ]
+        };
+
+        // create key channel:hash (hash: number = hash(workflow.getName()))
+        const channelWfHashKey: string = [testKey3, 2695549310].join(":");
+
+        // store workflow key in set for channelName:workflows
+        client.sadd([testKey3, "workflows"].join(":"), channelWfHashKey,
+            (err: Error, reply: number) => {
+            // save serialized workflow
+            client.set(channelWfHashKey, JSON.stringify(testDict),
+                (err: Error, reply:number) => {
+                    // instantiate manager with channel(s)
+                    const pManager: IWorkflowManager = new RedisWorkflowManager(config, null, [testKey3]);
+
+                    pManager.on(WorkflowEvents.Ready, () => {
+                        console.log(`pManager ready!`);
+                        expect(pManager.getWorkflowsForChannel(testKey3)).toEqual([testWorkflow1]);
+                        done();
+                    });
+                });
+        });
+    }); // constructor
 
     describe("getWorkflows", () => {
         it("returns dictionary of workflows", (done) => {
