@@ -34,8 +34,11 @@ export enum WorkflowEvents {
     Add = "add", // fired when new workflow added
     Remove = "remove", // fired when workflow removed
     Load = "load", // fired when workflow loaded from db
+    Save = "save", // fired when workflow saved in db
+    Delete = "delete", // fired when workflow deleted from db
     Start = "start", // fired when manager started channel
     Stop = "stop", // fired when manager stopped channel
+    Reset = "reset", // fired when reset
     Schedule = "schedule", // fired when actions are ActionType.Delay
     Immediate = "immediate", // fired when actions are ActionType.Immediate
     Audit = "audit", // fired for all actions
@@ -280,14 +283,67 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
+    public reset(channel?: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            this.emit(WorkflowEvents.Reset);
+            resolve();
+        });
+    }
+
+    protected saveWorkflowsToDatabase(channel: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+
+            // forEach
+                // SADD channel:workflows hash(channel:workflow.getName())
+                // SET hash(channel:workflow.getName()) JSON.stringify(workflow.toDict())
+
+            this.emit(WorkflowEvents.Save, channel);
+            resolve();
+        });
+    }
+
     protected loadWorkflowsFromDatabase(channel: string): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
 
+            // SMEMBERS channel:workflows
+            // forEach
+                // GET {value}
+                // const wfDict = JSON.parse(str)
+                // const tmpWf = workflow.fromDict(wfDict);
+            // this.setWorkflowsForChannel(channel, tmpWf);
+
             this.emit(WorkflowEvents.Load);
             resolve();
         });
+    }
+
+    protected removeWorkflowsFromDatabase(channel: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+
+            // DEL channel:workflows
+
+            this.emit(WorkflowEvents.Delete);
+            resolve();
+        });
+    }
+
+    protected hash(str: string): number {
+        let hash: number = 0;
+        if (str.length === 0) { return hash; }
+        for (let i = 0; i < str.length; i++) {
+            const char: number = str.charCodeAt(i);
+            hash = ((hash<<5)-hash)+char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
     }
 }

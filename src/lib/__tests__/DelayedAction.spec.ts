@@ -119,7 +119,7 @@ describe("DelayedAction", () => {
             const result: DelayedAction = delayedAction.setScheduledDate(170000000);
             expect(result).toBeInstanceOf(DelayedAction);
         });
-    });
+    }); // setScheduledDate
 
     describe("setInterval", () => {
         it("throws error for invalid input", () => {
@@ -141,13 +141,21 @@ describe("DelayedAction", () => {
             const result: DelayedAction = delayedAction.setInterval(1000);
             expect(result).toBeInstanceOf(DelayedAction);
         });
-    });
+    }); // setInterval
 
     describe("getIntervalAsMilliseconds", () => {
         it("returns interval of 1 day (since delay was 1, 'day' upon creation)", () => {
             const testInterval: number = 1000 * 60 * 60 * 24;
             const result: number = testAction.getIntervalAsMilliseconds();
             expect(result).toEqual(testInterval);
+        });
+    });
+
+    describe("getRecurrences", () => {
+        it("returns recurrence value", () => {
+            const delayedAction: DelayedAction = new DelayedAction("fake").delay(1, "hour").repeat();
+            const check: number = delayedAction.getRecurrences();
+            expect(check).toEqual(0);
         });
     });
 
@@ -235,7 +243,9 @@ describe("DelayedAction", () => {
             const result: DelayedAction = delayedAction.delay(1, "day");
             expect(result).toBeInstanceOf(DelayedAction);
         });
-    });
+
+
+    }); // delay
 
     describe("repeat", () => {
         it("sets infinite number of recurrances", () => {
@@ -255,7 +265,7 @@ describe("DelayedAction", () => {
             const result: DelayedAction = delayedAction.repeat();
             expect(result).toBeInstanceOf(DelayedAction);
         });
-    });
+    }); // repeat
 
     describe("setScheduledDateFrom", () => {
         it("adds interval amount to start date", () => {
@@ -274,5 +284,4 @@ describe("DelayedAction", () => {
             expect(check).toEqual( Math.floor(expected / 1000) );
         });
     });
-
 });

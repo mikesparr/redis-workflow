@@ -335,4 +335,21 @@ describe("RedisWorkflow", () => {
         });
     }); // stop
 
+    describe("reset", () => {
+        it("returns a Promise", () => {
+            expect(manager.reset()).toBeInstanceOf(Promise);
+        });
+
+        it("emits an EventEmitter event", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Reset, () => {
+                // assert
+                done();
+            });
+
+            // act
+            manager.reset();
+        });
+    }); // reset
+
 }); // redis workflow

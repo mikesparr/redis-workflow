@@ -1,3 +1,5 @@
+import * as mozjexl from "mozjexl";
+
 import { Action, ActionType } from "../Action";
 import DelayedAction from "../DelayedAction";
 import IAction from "../IAction";
@@ -31,28 +33,6 @@ describe("Workflow", () => {
     it("instantiates a workflow object", () => {
         testWorkflow = new Workflow(testWorkflowName, trigger, [rule1, rule2], [action1, action2]);
         expect(testWorkflow).toBeInstanceOf(Workflow);
-    });
-
-    it("returns actions if conditions met", (done) => {
-        // arrange
-        const message: Dictionary = {
-            context: {
-                foo: "bar",
-                inStock: 3,
-            },
-            event: testTriggerName,
-        };
-
-        // act
-        testWorkflow.getActionsForContext(message.context)
-            .then((result) => {
-                // assert
-                expect(result.length).toEqual(2); // action1, action2
-                done();
-            })
-            .catch((error) => {
-                done.fail(error);
-            });
     });
 
     describe("getId", () => {
@@ -153,6 +133,118 @@ describe("Workflow", () => {
             testWorkflow.setActions([newAction]);
             const check: IAction[] = testWorkflow.getActions();
             expect(check).toEqual([newAction]);
+        });
+    });
+
+    describe("addAction", () => {
+        beforeAll(() => {
+            testWorkflow.setActions([action1]);
+        });
+
+        it("sets actions", () => {
+            testWorkflow.addAction(action2);
+            const check: IAction[] = testWorkflow.getActions();
+            expect(check).toEqual([action1, action2]);
+        });
+    });
+
+    describe("removeAction", () => {
+        beforeAll(() => {
+            testWorkflow.setActions([action1, action2]);
+        });
+
+        it("returns actions", () => {
+            testWorkflow.removeAction(testActionName1);
+            const check: IAction[] = testWorkflow.getActions();
+            expect(check).toEqual([action2]);
+        });
+    });
+
+    describe("getEvaluator", () => {
+        it("returns evaluator", () => {
+            const result: mozjexl.Jexl = testWorkflow.getEvaluator();
+            expect(result).toBeDefined();
+        });
+    });
+
+    describe("setEvaluator", () => {
+        it("sets evaluator", () => {
+            testWorkflow.setEvaluator(new mozjexl.Jexl());
+            expect(testWorkflow.getEvaluator()).toBeDefined();
+        });
+    });
+
+    describe("getActionsForContext", () => {
+        const fakeWorkflow = new Workflow(testWorkflowName, trigger, [rule1, rule2], [action1, action2]);
+        
+        it("returns actions if conditions met", (done) => {
+            // arrange
+            const message: Dictionary = {
+                context: {
+                    foo: "bar",
+                    inStock: 3,
+                },
+                event: testTriggerName,
+            };
+    
+            // act
+            fakeWorkflow.getActionsForContext(message.context)
+                .then((result) => {
+                    // assert
+                    expect(result.length).toEqual(2); // action1, action2
+                    done();
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
+        });
+    }); // getActionsForContext
+
+    describe("toDict", () => {
+        it("returns Workflow serialized as Dictionary", (done) => {
+            const result: Dictionary = testWorkflow.toDict();
+
+            expect(result).toBeInstanceOf(Object);
+            expect(result.name).toEqual(testWorkflow.getName());
+            expect(result.trigger.name).toEqual(testWorkflow.getTrigger().getName());
+            expect(result.rules.length).toEqual(testWorkflow.getRules().length);
+            done();
+        });
+    });
+
+    describe("fromDict", () => {
+        const fakeWorkflow = new Workflow(testWorkflowName, trigger, [rule1], [action1]);
+
+        it("rebuilds Workflow from Dictionary", (done) => {
+            // arrange
+            const testDict: Dictionary = {
+                name: "newWorkflow",
+                trigger: {
+                    name: "testTrigger",
+                },
+                rules: [
+                    {
+                        name: testRuleName2,
+                        expression: testRuleExpression2,
+                    }
+                ],
+                actions: [
+                    {
+                        name: testActionName2,
+                        type: ActionType.Immediate,
+                    }
+                ]
+            }
+
+            // act
+            fakeWorkflow.fromDict(testDict);
+
+            // assert
+            expect(fakeWorkflow.getName()).toEqual("newWorkflow");
+            expect(fakeWorkflow.getTrigger().getName()).toEqual("testTrigger");
+            expect(fakeWorkflow.getRules()).toEqual([rule2]);
+            expect(fakeWorkflow.getActions()).toEqual([action2]);
+            done();
         });
     });
 });

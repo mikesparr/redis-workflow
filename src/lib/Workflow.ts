@@ -4,6 +4,8 @@ import IAction from "./IAction";
 import IRule from "./IRule";
 import ITrigger from "./ITrigger";
 import IWorkflow from "./IWorkflow";
+import { Trigger, Rule, DelayedAction, ImmediateAction } from "..";
+import { Action } from "./Action";
 
 export default class Workflow implements IWorkflow {
     protected id: string;
@@ -75,6 +77,22 @@ export default class Workflow implements IWorkflow {
         this.actions = actions;
     }
 
+    public addAction(action: IAction): void {
+        this.actions.push(action);
+    }
+
+    public removeAction(name: string): void {
+        this.actions = this.actions.filter((action) => action.getName() !== name);
+    }
+
+    public getEvaluator(): any {
+        return this.evaluator;
+    }
+
+    public setEvaluator(evaluator: any): void {
+        this.evaluator = evaluator;
+    }
+
     public getActionsForContext(context: Dictionary): Promise<IAction[]> {
         return new Promise((resolve, reject) => {
             let actionsToFire: IAction[] = [];
@@ -109,11 +127,71 @@ export default class Workflow implements IWorkflow {
         });
     }
 
-    public addAction(action: IAction): void {
-        this.actions.push(action);
+    public fromDict(dict: Dictionary): IWorkflow {
+        this.id = dict.id;
+        this.name = dict.name;
+        this.trigger = new Trigger(dict.trigger.name);
+        
+        this.rules = []; // reset
+        dict.rules.map((rule: Dictionary) => {
+            this.rules.push(new Rule(rule.name, rule.expression));
+        });
+
+        this.actions = []; // reset
+        dict.actions.map((action: Dictionary) => {
+            if (action.interval) {
+                this.actions.push(new DelayedAction(
+                    action.name,
+                    action.interval,
+                    action.context,
+                    action.scheduledAt,
+                    action.recurrence,
+                ));
+            } else {
+                this.actions.push(new ImmediateAction(
+                    action.name
+                ));
+            }
+        });
+
+        return this;
     }
 
-    public removeAction(name: string): void {
-        this.actions = this.actions.filter((action) => action.getName() !== name);
+    public toDict(): Dictionary {
+        const workflowDict: Dictionary = {
+            id: this.getId(),
+            name: this.getName(),
+            trigger: {
+                name: this.getTrigger().getName(),
+            }
+        }
+
+        const rules: Dictionary[] = [];
+        this.getRules().map((rule: IRule) => {
+            const ruleDict: Dictionary = {
+                name: rule.getName(),
+                expression: rule.getExpression(),
+            }
+            rules.push(ruleDict);
+        });
+        workflowDict.rules = rules;
+
+        const actions: Dictionary[] = [];
+        this.getActions().map((action: IAction) => {
+            const actionDict: Dictionary = {
+                name: action.getName(),
+                type: action.getType(),
+                context: action.getContext(),
+            }
+            if (action instanceof DelayedAction) {
+                actionDict.scheduledAt = action.getScheduledDateAsTimestamp();
+                actionDict.interval = action.getIntervalAsMilliseconds();
+                actionDict.recurrence = action.getRecurrences();
+            }
+            actions.push(actionDict);
+        });
+        workflowDict.actions = actions;
+
+        return workflowDict;
     }
 }

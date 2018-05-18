@@ -10,4 +10,5 @@ export default interface IWorkflowManager extends EventEmitter {
     removeWorkflow(channel: string, name: string): Promise<void>;
     start(channel: string): Promise<void>;
     stop(channel: string): Promise<void>;
+    reset(channel?: string): Promise<void>;
 }
