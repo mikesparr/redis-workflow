@@ -1,3 +1,5 @@
+/// <reference path="../global.d.ts" />
+
 import { EventEmitter } from "events";
 import * as redis from "redis";
 import {
@@ -28,6 +30,7 @@ describe("RedisWorkflow", () => {
 
     const testKey: string = "test123";
     const testKey2: string = "test234";
+    const testKey3: string = "test456";
     const testEmptyKey: string = "testEmptyKey999";
     const testKillMessage: string = "WFKILL"; // keep in sync with class
 
@@ -63,10 +66,15 @@ describe("RedisWorkflow", () => {
     }); // constructor
 
     beforeAll((done) => {
-        jest.setTimeout(10000); // 10 second timeout
+        jest.setTimeout(6000); // 6 second timeout
 
-        // add test workflow
-        manager.setWorkflows([testWorkflow1, testWorkflow2]);
+        // add test workflows
+        manager.setWorkflows({
+            [testKey]: [testWorkflow1, testWorkflow2],
+            [testKey2]: [testWorkflow1, testWorkflow2],
+            [testKey3]: [testWorkflow1, testWorkflow2],
+            [testEmptyKey]: [],
+        });
         done();
     });
 
@@ -75,8 +83,38 @@ describe("RedisWorkflow", () => {
     });
 
     describe("getWorkflows", () => {
+        it("returns dictionary of workflows", (done) => {
+            const result: Dictionary = manager.getWorkflows();
+
+            // assert
+            expect(result[testKey].length).toEqual(2);
+            expect(result[testKey][0]).toBeInstanceOf(Workflow);
+            expect(result[testKey2].length).toEqual(2);
+            expect(result[testKey2][0]).toBeInstanceOf(Workflow);
+            done();
+        });
+    }); // getWorkflows
+
+    describe("setWorkflows", () => {
+        it("replaces workflows with provided dictionary", (done) => {
+            // act
+            manager.setWorkflows({
+                [testKey]: [testWorkflow1, testWorkflow2],
+                [testKey2]: [testWorkflow1, testWorkflow2],
+                [testEmptyKey]: [],
+            });
+            const result: Dictionary = manager.getWorkflows();
+
+            // assert
+            expect(result[testKey].length).toEqual(2);
+            expect(result[testKey][0]).toBeInstanceOf(Workflow);
+            done();
+        });
+    }); // getWorkflows
+
+    describe("getWorkflowsForChannel", () => {
         it("returns array of workflows", (done) => {
-            const result: IWorkflow[] = manager.getWorkflows();
+            const result: IWorkflow[] = manager.getWorkflowsForChannel(testKey);
 
             // assert
             expect(result.length).toEqual(2);
@@ -85,15 +123,16 @@ describe("RedisWorkflow", () => {
         });
     }); // getWorkflows
 
-    describe("setWorkflows", () => {
-        it("replaces workflows with provided array", () => {
+    describe("setWorkflowsForChannel", () => {
+        it("replaces workflows with provided array", (done) => {
             // act
-            manager.setWorkflows([testWorkflow1, testWorkflow2]);
-            const result: IWorkflow[] = manager.getWorkflows();
+            manager.setWorkflowsForChannel(testKey, [testWorkflow1, testWorkflow2]);
+            const result: IWorkflow[] = manager.getWorkflowsForChannel(testKey);
 
             // assert
             expect(result.length).toEqual(2);
             expect(result[0]).toBeInstanceOf(Workflow);
+            done();
         });
     }); // getWorkflows
 
@@ -117,10 +156,10 @@ describe("RedisWorkflow", () => {
             // act
             manager.addWorkflow(testKey, testWorkflow1)
                 .then(() => {
-                    const result: IWorkflow[] = manager.getWorkflows(); // TODO: consider channel designation
+                    const result: IWorkflow[] = manager.getWorkflowsForChannel(testKey);
 
                     // assert
-                    expect(result.length).toBeGreaterThan(3);
+                    expect(result.length).toEqual(3);
                     expect(result[1]).toBeInstanceOf(Workflow);
                     done();
                 })
@@ -130,7 +169,52 @@ describe("RedisWorkflow", () => {
         });
     }); // addWorkflow
 
+    describe("removeWorkflow", () => {
+        it("returns a Promise", () => {
+            expect(manager.removeWorkflow(testEmptyKey, testWorkflow1.getName())).toBeInstanceOf(Promise);
+        });
+
+        it("emits an EventEmitter event", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Remove, () => {
+                // assert
+                done();
+            });
+
+            // act
+            manager.removeWorkflow(testEmptyKey, testWorkflow1.getName());
+        });
+
+        it("removes workflow from the array of workflows", (done) => {
+            // act
+            manager.removeWorkflow(testKey, testWorkflow1.getName())
+                .then(() => {
+                    const channelFlows: IWorkflow[] = manager.getWorkflowsForChannel(testKey);
+
+                    // assert
+                    channelFlows.filter((flow: IWorkflow) => flow.getName() === name);
+                    expect(channelFlows.length).toEqual(1);
+                    done();
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
+        });
+    }); // removeWorkflow
+
     describe("start", () => {
+        beforeAll((done) => {
+            // replace workflows
+            manager.setWorkflows({
+                [testKey]: [testWorkflow1, testWorkflow2],
+                [testKey2]: [testWorkflow1, testWorkflow2],
+                [testKey3]: [testWorkflow1, testWorkflow2],
+                [testEmptyKey]: [],
+            });
+
+            done();
+        });
+
         it("emits an EventEmitter event", (done) => {
             // arrange
             manager.on(WorkflowEvents.Start, () => {
@@ -163,9 +247,9 @@ describe("RedisWorkflow", () => {
                                 client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
                                     // do nothing
                                 });
-                            }, 3000);
+                            }, 1000);
                         });
-                    }, 1000);
+                    }, 500);
                 })
                 .catch((error) => {
                     done.fail(error);
@@ -193,9 +277,9 @@ describe("RedisWorkflow", () => {
                                 client.publish(testKey2, testKillMessage, (killErr: Error, _2: number) => {
                                     // do nothing
                                 });
-                            }, 3000);
+                            }, 1000);
                         });
-                    }, 1000);
+                    }, 500);
                 })
                 .catch((error) => {
                     done.fail(error);
@@ -214,18 +298,18 @@ describe("RedisWorkflow", () => {
             });
 
             // act
-            manager.start(testKey)
+            manager.start(testKey3)
                 .then(() => {
                     setTimeout(() => {
-                        client.publish(testKey, testEvent, (pubErr: Error, _1: number) => {
+                        client.publish(testKey3, testEvent, (pubErr: Error, _1: number) => {
                             // now kill it
                             setTimeout(() => {
-                                client.publish(testKey, testKillMessage, (killErr: Error, _2: number) => {
+                                client.publish(testKey3, testKillMessage, (killErr: Error, _2: number) => {
                                     // do nothing
                                 });
-                            }, 3000);
+                            }, 1000);
                         });
-                    }, 1000);
+                    }, 500);
                 })
                 .catch((error) => {
                     done.fail(error);

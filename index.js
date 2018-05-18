@@ -76,28 +76,74 @@ var RedisWorkflowManager = (function (_super) {
             _this.client = redis.createClient(options);
             _this.subscriber = redis.createClient(options);
         }
+        _this.workflows = {};
         return _this;
     }
     RedisWorkflowManager.prototype.setWorkflows = function (workflows) {
         if (typeof workflows !== "object") {
-            throw new TypeError("Workflows are required");
+            throw new TypeError("Workflows must be a valid object");
         }
         this.workflows = workflows;
     };
+    RedisWorkflowManager.prototype.setWorkflowsForChannel = function (channel, workflows) {
+        if (typeof workflows !== "object") {
+            throw new TypeError("Workflows must be a valid object");
+        }
+        this.workflows[channel] = workflows;
+    };
     RedisWorkflowManager.prototype.getWorkflows = function () {
-        return this.workflows || [];
+        return this.workflows || {};
+    };
+    RedisWorkflowManager.prototype.getWorkflowsForChannel = function (channel) {
+        if (typeof channel !== "string") {
+            throw new TypeError("Channel must be a valid string");
+        }
+        if (!this.workflows) {
+            throw new Error("You haven't defined any workflows yet");
+        }
+        if (this.workflows && !this.workflows[channel]) {
+            throw new Error("No workflows exist for that channel");
+        }
+        return this.workflows[channel];
     };
     RedisWorkflowManager.prototype.addWorkflow = function (channel, workflow) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
-                throw new TypeError("Channel parameter must be a string");
+                throw new TypeError("Channel must be a valid string");
             }
             if (typeof workflow !== "object") {
                 throw new TypeError("Workflow is required");
             }
-            _this.workflows ? _this.workflows.push(workflow) : _this.workflows = [workflow];
+            if (!_this.workflows) {
+                _this.workflows = (_a = {}, _a[channel] = [workflow], _a);
+            }
+            else if (_this.workflows && !_this.workflows[channel]) {
+                _this.workflows[channel] = [workflow];
+            }
+            else {
+                _this.workflows[channel].push(workflow);
+            }
             _this.emit(WorkflowEvents.Add);
+            resolve();
+            var _a;
+        });
+    };
+    RedisWorkflowManager.prototype.removeWorkflow = function (channel, name) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel must be a valid string");
+            }
+            if (typeof name !== "string") {
+                throw new TypeError("Name must be a valid string");
+            }
+            if (_this.workflows && _this.workflows[channel]) {
+                var channelFlow = _this.workflows[channel];
+                channelFlow = channelFlow.filter(function (flow) { return flow.getName() !== name; });
+                _this.workflows[channel] = channelFlow;
+            }
+            _this.emit(WorkflowEvents.Remove);
             resolve();
         });
     };
@@ -105,10 +151,16 @@ var RedisWorkflowManager = (function (_super) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
-                throw new TypeError("Channel parameter must be a string");
+                throw new TypeError("Channel must be a valid string");
+            }
+            if (!_this.workflows) {
+                throw new Error("You haven't defined any workflows yet");
+            }
+            if (_this.workflows && !_this.workflows[channel]) {
+                throw new Error("No workflows exist for that channel");
             }
             var triggerMap = {};
-            _this.workflows.map(function (flow) {
+            _this.workflows[channel].map(function (flow) {
                 if (flow &&
                     flow !== null &&
                     flow.getTrigger() !== null &&
@@ -118,49 +170,51 @@ var RedisWorkflowManager = (function (_super) {
                 }
             });
             _this.subscriber.on("message", function (ch, message) {
-                if (message === _this.PUBSUB_KILL_MESSAGE) {
-                    _this.subscriber.unsubscribe(channel);
-                    _this.emit(WorkflowEvents.Kill);
-                }
-                else if (message && typeof message === "string") {
-                    try {
-                        var jsonMessage = JSON.parse(message);
-                        var event_1 = jsonMessage.event, context_1 = jsonMessage.context;
-                        var activeFlow = (event_1 && context_1) ? triggerMap[event_1] : null;
-                        if (activeFlow) {
-                            activeFlow.getActionsForContext(context_1)
-                                .then(function (actions) {
-                                actions.map(function (action) {
-                                    action.setContext(context_1);
-                                    if (action && action instanceof DelayedAction_1.default) {
-                                        _this.emit(action.getName(), action);
-                                        _this.emit(WorkflowEvents.Schedule, action);
-                                        _this.emit(WorkflowEvents.Audit, action);
-                                    }
-                                    else if (action && action instanceof ImmediateAction_1.default) {
-                                        _this.emit(action.getName(), action);
-                                        _this.emit(WorkflowEvents.Immediate, action);
-                                        _this.emit(WorkflowEvents.Audit, action);
-                                    }
-                                    else {
-                                        _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
-                                    }
+                if (ch === channel) {
+                    if (message === _this.PUBSUB_KILL_MESSAGE) {
+                        _this.subscriber.unsubscribe(channel);
+                        _this.emit(WorkflowEvents.Kill);
+                    }
+                    else if (message && typeof message === "string") {
+                        try {
+                            var jsonMessage = JSON.parse(message);
+                            var event_1 = jsonMessage.event, context_1 = jsonMessage.context;
+                            var activeFlow = (event_1 && context_1) ? triggerMap[event_1] : null;
+                            if (activeFlow) {
+                                activeFlow.getActionsForContext(context_1)
+                                    .then(function (actions) {
+                                    actions.map(function (action) {
+                                        action.setContext(context_1);
+                                        if (action && action instanceof DelayedAction_1.default) {
+                                            _this.emit(action.getName(), action);
+                                            _this.emit(WorkflowEvents.Schedule, action);
+                                            _this.emit(WorkflowEvents.Audit, action);
+                                        }
+                                        else if (action && action instanceof ImmediateAction_1.default) {
+                                            _this.emit(action.getName(), action);
+                                            _this.emit(WorkflowEvents.Immediate, action);
+                                            _this.emit(WorkflowEvents.Audit, action);
+                                        }
+                                        else {
+                                            _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
+                                        }
+                                    });
+                                })
+                                    .catch(function (error) {
+                                    _this.emit(WorkflowEvents.Error, error);
                                 });
-                            })
-                                .catch(function (error) {
-                                _this.emit(WorkflowEvents.Error, error);
-                            });
+                            }
+                            else {
+                                _this.emit(WorkflowEvents.Error, new TypeError("No trigger defined for event '" + event_1 + "'"));
+                            }
                         }
-                        else {
-                            _this.emit(WorkflowEvents.Error, new TypeError("No trigger defined for event '" + event_1 + "'"));
+                        catch (error) {
+                            _this.emit(WorkflowEvents.Error, error);
                         }
                     }
-                    catch (error) {
-                        _this.emit(WorkflowEvents.Error, error);
+                    else {
+                        _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid JSON '{event, context}'"));
                     }
-                }
-                else {
-                    _this.emit(WorkflowEvents.Error, new TypeError("Message " + message + " is not valid JSON '{event, context}'"));
                 }
             });
             _this.subscriber.subscribe(channel, function (err, reply) {

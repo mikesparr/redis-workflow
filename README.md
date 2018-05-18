@@ -41,7 +41,7 @@ const action = new flow.ImmediateAction("myAction");
 const workflow = new flow.Workflow("myWorkflow", trigger, [rule], [action]);
 
 // add workflow to manager
-manager.setWorkflows([workflow]);
+manager.setWorkflows({"myChannel": [workflow]});
 
 // add listener for action
 manager.on("myAction", (action) => {
@@ -95,7 +95,7 @@ const action2: flow.IAction = new flow.ImmediateAction("adjustInventory");
 const workflow: flow.IWorkflow = new flow.Workflow("test.workflow1", trigger, [rule1, rule2], [action1, action2]);
 
 // add first workflow to manager
-manager.setWorkflows(workflow);
+manager.setWorkflows({"myChannel": [workflow]});
 
 // errors
 manager.on(WorkflowEvents.Error, (error) => {
@@ -166,7 +166,7 @@ setTimeout(() => {
         // simulate time later shutting down workflow channel
         setTimeout(() => {
             manager.stop("babyDivision");
-        }, 5000);
+        }, 3000);
     });
 }, 3000);
 ```
@@ -192,19 +192,28 @@ The `message` published to the topic will include a stringified JSON object as f
 Uses `mozjexl` Javascript expression language to evaluate string expressions, evaluating to `true` or `false`.
 
 ```typescript
-const rule: IRule = new Rule("Field must be valid", "myField == myValue");
+const rule: IRule = new Rule("Field must be valid", `myField == "myValue"`);
 ```
 
 ## Actions
 You define actions when building workflows. The action name will become an `EventEmitter` event you handle.
 
 ```typescript
-manager.on("eventName", () => {
+// optionally named
+manager.on("eventName", (action) => {
+    // handle action here
+});
+
+manager.on(flow.WorkflowEvents.Schedule, (action) => {
+    // handle action here
+});
+
+manager.on(flow.WorkflowEvents.Immediate, (action) => {
     // handle action here
 });
 ```
 
-For each `Action` you add to your workflow, you add a listener like above. You can decide what functionality 
+For each `Action` you add to your workflow, you one or more listeners like above. You can decide what functionality 
 your application performs if conditions are met, and actions are emitted.
 
 ### Suggested action types
