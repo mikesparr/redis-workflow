@@ -243,8 +243,6 @@ describe("DelayedAction", () => {
             const result: DelayedAction = delayedAction.delay(1, "day");
             expect(result).toBeInstanceOf(DelayedAction);
         });
-
-
     }); // delay
 
     describe("repeat", () => {

@@ -32,8 +32,12 @@ var WorkflowEvents;
     WorkflowEvents["Add"] = "add";
     WorkflowEvents["Remove"] = "remove";
     WorkflowEvents["Load"] = "load";
+    WorkflowEvents["Save"] = "save";
+    WorkflowEvents["Delete"] = "delete";
+    WorkflowEvents["Ready"] = "ready";
     WorkflowEvents["Start"] = "start";
     WorkflowEvents["Stop"] = "stop";
+    WorkflowEvents["Reset"] = "reset";
     WorkflowEvents["Schedule"] = "schedule";
     WorkflowEvents["Immediate"] = "immediate";
     WorkflowEvents["Audit"] = "audit";
@@ -41,11 +45,21 @@ var WorkflowEvents;
 })(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
 var RedisWorkflowManager = (function (_super) {
     __extends(RedisWorkflowManager, _super);
-    function RedisWorkflowManager(config, client) {
+    function RedisWorkflowManager(config, client, channels) {
         var _this = _super.call(this) || this;
         _this.DEFAULT_REDIS_HOST = "localhost";
         _this.DEFAULT_REDIS_PORT = 6379;
         _this.PUBSUB_KILL_MESSAGE = "WFKILL";
+        _this.REDIS_WORKFLOW_KEY_SUFFIX = "workflows";
+        if (config && typeof config !== "object") {
+            throw new TypeError("Config must be null or a valid RedisConfig");
+        }
+        if (client && typeof client !== "object") {
+            throw new TypeError("Client must be null or a valid RedisClient");
+        }
+        if (channels && channels.length === 0) {
+            throw new TypeError("Channels must be valid array of at least one string");
+        }
         if (client && client instanceof redis.RedisClient) {
             _this.client = client;
             _this.subscriber = client;
@@ -77,6 +91,19 @@ var RedisWorkflowManager = (function (_super) {
             _this.subscriber = redis.createClient(options);
         }
         _this.workflows = {};
+        if (channels) {
+            var jobs_1 = [];
+            channels.map(function (ch) {
+                jobs_1.push(_this.loadWorkflowsFromDatabase(ch));
+            });
+            Promise.all(jobs_1)
+                .then(function (values) {
+                _this.emit(WorkflowEvents.Ready);
+            })
+                .catch(function (error) {
+                _this.emit(WorkflowEvents.Error, (error));
+            });
+        }
         return _this;
     }
     RedisWorkflowManager.prototype.setWorkflows = function (workflows) {
@@ -173,7 +200,7 @@ var RedisWorkflowManager = (function (_super) {
                 if (ch === channel) {
                     if (message === _this.PUBSUB_KILL_MESSAGE) {
                         _this.subscriber.unsubscribe(channel);
-                        _this.emit(WorkflowEvents.Kill);
+                        _this.emit(WorkflowEvents.Kill, channel);
                     }
                     else if (message && typeof message === "string") {
                         try {
@@ -238,15 +265,95 @@ var RedisWorkflowManager = (function (_super) {
             });
         });
     };
+    RedisWorkflowManager.prototype.reset = function (channel) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            _this.emit(WorkflowEvents.Reset);
+            resolve();
+        });
+    };
+    RedisWorkflowManager.prototype.saveWorkflowsToDatabase = function (channel) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+            _this.emit(WorkflowEvents.Save, channel);
+            resolve();
+        });
+    };
+    RedisWorkflowManager.prototype.getWorkflowFromDb = function (key) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (key && typeof key !== "string") {
+                throw new TypeError("Key must be valid string");
+            }
+            _this.client.get(key, function (err, reply) {
+                if (err !== null) {
+                    throw err;
+                }
+                try {
+                    var pFlow = JSON.parse(reply);
+                    var pWorkflow = new Workflow_1.default().fromDict(pFlow);
+                    resolve(pWorkflow);
+                }
+                catch (error) {
+                    reject(error);
+                }
+            });
+        });
+    };
     RedisWorkflowManager.prototype.loadWorkflowsFromDatabase = function (channel) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
-            _this.emit(WorkflowEvents.Load);
-            resolve();
+            var jobs = [];
+            _this.client.smembers([channel, _this.REDIS_WORKFLOW_KEY_SUFFIX].join(":"), function (err, flows) {
+                if (err !== null) {
+                    throw err;
+                }
+                flows.map(function (key) {
+                    jobs.push(_this.getWorkflowFromDb(key));
+                });
+                Promise.all(jobs)
+                    .then(function (pWorkflows) {
+                    _this.setWorkflowsForChannel(channel, pWorkflows);
+                    _this.emit(WorkflowEvents.Load);
+                    resolve();
+                })
+                    .catch(function (error) {
+                    throw error;
+                });
+            });
         });
+    };
+    RedisWorkflowManager.prototype.removeWorkflowsFromDatabase = function (channel) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (typeof channel !== "string") {
+                throw new TypeError("Channel parameter must be a string");
+            }
+            var key = [channel, _this.REDIS_WORKFLOW_KEY_SUFFIX].join(":");
+            _this.client.del(key, function (err, reply) {
+                _this.emit(WorkflowEvents.Delete, channel);
+                resolve();
+            });
+        });
+    };
+    RedisWorkflowManager.prototype.hash = function (str) {
+        var hash = 0;
+        var strlen = str.length;
+        if (strlen === 0) {
+            return hash;
+        }
+        for (var i = 0; i < strlen; ++i) {
+            var code = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + code;
+            hash &= hash;
+        }
+        return (hash >>> 0);
     };
     return RedisWorkflowManager;
 }(events_1.EventEmitter));

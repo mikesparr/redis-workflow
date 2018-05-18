@@ -54,6 +54,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
     protected readonly DEFAULT_REDIS_HOST: string = "localhost";
     protected readonly DEFAULT_REDIS_PORT: number = 6379;
     protected readonly PUBSUB_KILL_MESSAGE: string = "WFKILL";
+    protected readonly REDIS_WORKFLOW_KEY_SUFFIX: string = "workflows";
 
     constructor(config: RedisConfig, client?: redis.RedisClient, channels?: string[]) {
         super();
@@ -115,6 +116,9 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
             Promise.all(jobs)
                 .then((values: any[]) => {
                     this.emit(WorkflowEvents.Ready);
+                })
+                .catch((error) => {
+                    this.emit(WorkflowEvents.Error, (error));
                 });
         }
     }
@@ -328,10 +332,33 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
 
             // forEach
                 // SADD channel:workflows hash(channel:workflow.getName())
-                // SET hash(channel:workflow.getName()) JSON.stringify(workflow.toDict())
+                // SET channel:hash(workflow.getName()) JSON.stringify(workflow.toDict())
 
             this.emit(WorkflowEvents.Save, channel);
             resolve();
+        });
+    }
+
+    protected getWorkflowFromDb(key: string): Promise<IWorkflow> {
+        return new Promise((resolve, reject) => {
+            if (key && typeof key !== "string") {
+                throw new TypeError("Key must be valid string");
+            }
+
+            this.client.get(key, (err: Error, reply: string) => {
+                if (err !== null) {
+                    throw err;
+                }
+
+                try {
+                    const pFlow: Dictionary = JSON.parse(reply);
+                    const pWorkflow: IWorkflow = new Workflow().fromDict(pFlow);
+
+                    resolve(pWorkflow);
+                } catch (error) {
+                    reject(error);
+                }
+            });
         });
     }
 
@@ -341,15 +368,32 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 throw new TypeError("Channel parameter must be a string");
             }
 
-            // SMEMBERS channel:workflows
-            // forEach
-                // GET {value}
-                // const wfDict = JSON.parse(str)
-                // const tmpWf = workflow.fromDict(wfDict);
-            // this.setWorkflowsForChannel(channel, tmpWf);
+            const jobs: Promise<any>[] = [];
 
-            this.emit(WorkflowEvents.Load);
-            resolve();
+            this.client.smembers(
+                [channel, this.REDIS_WORKFLOW_KEY_SUFFIX].join(":"),
+                (err: Error, flows: string[]) => {
+
+                if (err !== null) {
+                    throw err;
+                }
+
+                // loop through keys and get JSON workflow dict
+                flows.map((key) => {
+                    jobs.push(this.getWorkflowFromDb(key));
+                }); // flows
+
+                Promise.all(jobs)
+                    .then((pWorkflows) => {
+                        this.setWorkflowsForChannel(channel, pWorkflows);
+
+                        this.emit(WorkflowEvents.Load);
+                        resolve();
+                    })
+                    .catch((error) => {
+                        throw error;
+                    });
+            }); // smembers
         });
     }
 
@@ -359,10 +403,11 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 throw new TypeError("Channel parameter must be a string");
             }
 
-            // DEL channel:workflows
-
-            this.emit(WorkflowEvents.Delete);
-            resolve();
+            const key: string = [channel, this.REDIS_WORKFLOW_KEY_SUFFIX].join(":");
+            this.client.del(key, (err: Error, reply: number) => {
+                this.emit(WorkflowEvents.Delete, channel);
+                resolve();
+            });
         });
     }
 

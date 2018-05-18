@@ -176,7 +176,7 @@ describe("Workflow", () => {
 
     describe("getActionsForContext", () => {
         const fakeWorkflow = new Workflow(testWorkflowName, trigger, [rule1, rule2], [action1, action2]);
-        
+
         it("returns actions if conditions met", (done) => {
             // arrange
             const message: Dictionary = {
@@ -186,7 +186,7 @@ describe("Workflow", () => {
                 },
                 event: testTriggerName,
             };
-    
+
             // act
             fakeWorkflow.getActionsForContext(message.context)
                 .then((result) => {
@@ -218,23 +218,23 @@ describe("Workflow", () => {
         it("rebuilds Workflow from Dictionary", (done) => {
             // arrange
             const testDict: Dictionary = {
-                name: "newWorkflow",
-                trigger: {
-                    name: "testTrigger",
-                },
-                rules: [
-                    {
-                        name: testRuleName2,
-                        expression: testRuleExpression2,
-                    }
-                ],
                 actions: [
                     {
                         name: testActionName2,
                         type: ActionType.Immediate,
-                    }
-                ]
-            }
+                    },
+                ],
+                name: "newWorkflow",
+                rules: [
+                    {
+                        expression: testRuleExpression2,
+                        name: testRuleName2,
+                    },
+                ],
+                trigger: {
+                    name: "testTrigger",
+                },
+            };
 
             // act
             fakeWorkflow.fromDict(testDict);

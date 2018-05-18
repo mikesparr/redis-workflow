@@ -1,11 +1,14 @@
 import * as mozjexl from "mozjexl";
 
+import { Action } from "./Action";
+import DelayedAction from "./DelayedAction";
 import IAction from "./IAction";
+import ImmediateAction from "./ImmediateAction";
 import IRule from "./IRule";
 import ITrigger from "./ITrigger";
 import IWorkflow from "./IWorkflow";
-import { Trigger, Rule, DelayedAction, ImmediateAction } from "..";
-import { Action } from "./Action";
+import Rule from "./Rule";
+import Trigger from "./Trigger";
 
 export default class Workflow implements IWorkflow {
     protected id: string;
@@ -15,18 +18,34 @@ export default class Workflow implements IWorkflow {
     protected actions: IAction[];
     protected evaluator: any;
 
-    constructor(name: string, trigger: ITrigger, rules: IRule[], actions: IAction[], id?: string) {
-        this.name = name;
-        this.trigger = trigger;
-        this.rules = rules;
-        this.actions = actions;
-
-        if (id) {
-            this.id = id;
+    constructor(name?: string, trigger?: ITrigger, rules?: IRule[], actions?: IAction[], id?: string) {
+        if (name && typeof name !== "string") {
+            throw new TypeError("Name must be valid string");
+        }
+        if (trigger && typeof trigger !== "object") {
+            throw new TypeError("Trigger must be null or valid ITrigger");
+        }
+        if (rules && typeof rules !== "object") {
+            throw new TypeError("Rules must be null or valid IRule[]");
+        }
+        if (actions && typeof actions !== "object") {
+            throw new TypeError("Actions must be null or valid IAction[]");
+        }
+        if (id && typeof id !== "string") {
+            throw new TypeError("Id must be valid string");
         }
 
+        this.name = name || undefined;
+        this.trigger = trigger || undefined;
+        this.rules = rules || undefined;
+        this.actions = actions || undefined;
+        this.id = id || undefined;
+
         // instantiate EL evaluator
+        // TODO: consider injecting this dependency as shared
         this.evaluator = new mozjexl.Jexl();
+
+        return this;
     }
 
     public getId(): string {
@@ -131,7 +150,7 @@ export default class Workflow implements IWorkflow {
         this.id = dict.id;
         this.name = dict.name;
         this.trigger = new Trigger(dict.trigger.name);
-        
+
         this.rules = []; // reset
         dict.rules.map((rule: Dictionary) => {
             this.rules.push(new Rule(rule.name, rule.expression));
@@ -149,7 +168,7 @@ export default class Workflow implements IWorkflow {
                 ));
             } else {
                 this.actions.push(new ImmediateAction(
-                    action.name
+                    action.name,
                 ));
             }
         });
@@ -163,15 +182,15 @@ export default class Workflow implements IWorkflow {
             name: this.getName(),
             trigger: {
                 name: this.getTrigger().getName(),
-            }
-        }
+            },
+        };
 
         const rules: Dictionary[] = [];
         this.getRules().map((rule: IRule) => {
             const ruleDict: Dictionary = {
-                name: rule.getName(),
                 expression: rule.getExpression(),
-            }
+                name: rule.getName(),
+            };
             rules.push(ruleDict);
         });
         workflowDict.rules = rules;
@@ -179,10 +198,10 @@ export default class Workflow implements IWorkflow {
         const actions: Dictionary[] = [];
         this.getActions().map((action: IAction) => {
             const actionDict: Dictionary = {
+                context: action.getContext(),
                 name: action.getName(),
                 type: action.getType(),
-                context: action.getContext(),
-            }
+            };
             if (action instanceof DelayedAction) {
                 actionDict.scheduledAt = action.getScheduledDateAsTimestamp();
                 actionDict.interval = action.getIntervalAsMilliseconds();

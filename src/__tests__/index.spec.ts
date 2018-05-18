@@ -91,22 +91,22 @@ describe("RedisWorkflowManager", () => {
     it("loads workflows from database if channels provided", (done) => {
         // arrange
         const testDict: Dictionary = {
-            name: testWorkflowName,
-            trigger: {
-                name: testEventName,
-            },
-            rules: [
-                {
-                    name: testRuleName,
-                    expression: testRuleExpression,
-                }
-            ],
             actions: [
                 {
                     name: testActionName,
                     type: ActionType.Immediate,
-                }
-            ]
+                },
+            ],
+            name: testWorkflowName,
+            rules: [
+                {
+                    expression: testRuleExpression,
+                    name: testRuleName,
+                },
+            ],
+            trigger: {
+                name: testEventName,
+            },
         };
 
         // create key channel:hash (hash: number = hash(workflow.getName()))
@@ -114,19 +114,26 @@ describe("RedisWorkflowManager", () => {
 
         // store workflow key in set for channelName:workflows
         client.sadd([testKey3, "workflows"].join(":"), channelWfHashKey,
-            (err: Error, reply: number) => {
+            (saddError: Error, saddReply: number) => {
+
             // save serialized workflow
             client.set(channelWfHashKey, JSON.stringify(testDict),
-                (err: Error, reply:number) => {
-                    // instantiate manager with channel(s)
-                    const pManager: IWorkflowManager = new RedisWorkflowManager(config, null, [testKey3]);
+                (setError: Error, setReply: number) => {
 
-                    pManager.on(WorkflowEvents.Ready, () => {
-                        console.log(`pManager ready!`);
-                        expect(pManager.getWorkflowsForChannel(testKey3)).toEqual([testWorkflow1]);
-                        done();
-                    });
+                // instantiate manager with channel(s)
+                const pManager: IWorkflowManager = new RedisWorkflowManager(config, null, [testKey3]);
+
+                pManager.on(WorkflowEvents.Ready, () => {
+                    const result: IWorkflow[] = pManager.getWorkflowsForChannel(testKey3);
+                    expect(result).toBeDefined();
+                    expect(result).toEqual([testWorkflow1]);
+                    done();
                 });
+
+                pManager.on(WorkflowEvents.Error, (error) => {
+                    done.fail(error);
+                });
+            });
         });
     }); // constructor
 
