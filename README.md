@@ -10,6 +10,15 @@ This app is loosely-based on popular enterprise systems workflow rules or busine
  * Conditions (or filters) - criteria to take action
  * Actions (or tasks) - what to do
 
+# Requirements
+You must have Redis server running. This app treats redis like a persistent backup. It uses `pubsub` as a listener 
+for trigger events. It uses it to save and load workflows to avoid loss. The `set` and `get` workflows methods 
+just interact with memory and not database. See the `IWorkflowManager` interface source for more.
+
+# Extensibility
+Most non-public properties and methods are `protected` so you may sub-class and override. `RedisWorkflowManager` is my 
+preferred implementation but you could also write a new manager class that implements `IWorkflowManager` interface.
+
 # Installation
 ```bash
 npm install redis-workflow
@@ -221,6 +230,15 @@ your application performs if conditions are met, and actions are emitted.
  * Update record(s)
  * Trigger another workflow
  * Send message(s) or notification(s)
+
+# Scaling
+This implementation using `pubsub` can scale by leveraging different channels per instance, with a fanout. If you 
+want workers, I would override the `start` method to use Redis `blrpoplpush` (blocking pop of list) and publish 
+trigger events to it instead. This way you can spin up unlimited workers and once one pops from list, others ignore.
+
+# Resilience
+If you instantiate the manager and pass in the third optional argument `channels: string[]`, the app will attempt 
+to load workflows from the database.
 
 # Contributing
 I haven't thought that far ahead yet. I needed this for my project and wanted to give back. ;-)
