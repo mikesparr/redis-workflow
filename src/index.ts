@@ -159,10 +159,10 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
 
     public addWorkflow(channel: string, workflow: IWorkflow): Promise<void> {
         return new Promise((resolve, reject) => {
-            if (typeof channel !== "string") {
+            if (!channel || typeof channel !== "string") {
                 throw new TypeError("Channel must be a valid string");
             }
-            if (typeof workflow !== "object") {
+            if (!workflow || typeof workflow !== "object") {
                 throw new TypeError("Workflow is required");
             }
 
@@ -175,17 +175,24 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 this.workflows[channel].push(workflow);
             }
 
-            this.emit(WorkflowEvents.Add);
-            resolve();
+            // save to database
+            this.saveWorkflowsToDatabase(channel)
+                .then(() => {
+                    this.emit(WorkflowEvents.Add);
+                    resolve();
+                })
+                .catch((error) => {
+                    reject(error);
+                });
         });
     }
 
     public removeWorkflow(channel: string, name: string): Promise<void> {
         return new Promise((resolve, reject) => {
-            if (typeof channel !== "string") {
+            if (!channel || typeof channel !== "string") {
                 throw new TypeError("Channel must be a valid string");
             }
-            if (typeof name !== "string") {
+            if (!name || typeof name !== "string") {
                 throw new TypeError("Name must be a valid string");
             }
 
@@ -330,18 +337,59 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 throw new TypeError("Channel parameter must be a string");
             }
 
-            // forEach
-                // SADD channel:workflows hash(channel:workflow.getName())
-                // SET channel:hash(workflow.getName()) JSON.stringify(workflow.toDict())
+            if (this.workflows) {
+                const jobs: Array<Promise<string>> = [];
 
-            this.emit(WorkflowEvents.Save, channel);
-            resolve();
+                this.workflows[channel].map((workflow: IWorkflow) => {
+                    // build key
+                    const nameHash: number = this.hash(workflow.getName());
+                    const key: string = [channel, nameHash].join(":");
+
+                    // queue job
+                    jobs.push(this.saveWorkflowToDb(key, workflow));
+                });
+
+                // run jobs and add keys to workflows set
+                Promise.all(jobs)
+                    .then((workflowKeys) => {
+                        const channelWorkflowId: string = [channel, this.REDIS_WORKFLOW_KEY_SUFFIX].join(":");
+                        this.client.sadd(channelWorkflowId, ...workflowKeys, (err: Error, reply: number) => {
+                            this.emit(WorkflowEvents.Save, channel);
+                            resolve();
+                        });
+                    })
+                    .catch((error) => {
+                        reject(error);
+                    });
+            }
+        });
+    }
+
+    protected saveWorkflowToDb(key: string, workflow: IWorkflow): Promise<string> {
+        return new Promise((resolve, reject) => {
+            if (!key || typeof key !== "string") {
+                throw new TypeError("Key must be valid string");
+            }
+            if (!workflow || typeof workflow !== "object") {
+                throw new TypeError("Workflow must be valid Workflow");
+            }
+
+            // serialize
+            const workflowDict: Dictionary = workflow.toDict();
+
+            this.client.set(key, JSON.stringify(workflowDict), (err: Error, reply: string) => {
+                if (err !== null) {
+                    throw err;
+                }
+
+                resolve(key);
+            });
         });
     }
 
     protected getWorkflowFromDb(key: string): Promise<IWorkflow> {
         return new Promise((resolve, reject) => {
-            if (key && typeof key !== "string") {
+            if (!key || typeof key !== "string") {
                 throw new TypeError("Key must be valid string");
             }
 
@@ -368,7 +416,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 throw new TypeError("Channel parameter must be a string");
             }
 
-            const jobs: Promise<any>[] = [];
+            const jobs: Array<Promise<any>> = [];
 
             this.client.smembers(
                 [channel, this.REDIS_WORKFLOW_KEY_SUFFIX].join(":"),

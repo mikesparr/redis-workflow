@@ -136,10 +136,10 @@ var RedisWorkflowManager = (function (_super) {
     RedisWorkflowManager.prototype.addWorkflow = function (channel, workflow) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            if (typeof channel !== "string") {
+            if (!channel || typeof channel !== "string") {
                 throw new TypeError("Channel must be a valid string");
             }
-            if (typeof workflow !== "object") {
+            if (!workflow || typeof workflow !== "object") {
                 throw new TypeError("Workflow is required");
             }
             if (!_this.workflows) {
@@ -151,18 +151,24 @@ var RedisWorkflowManager = (function (_super) {
             else {
                 _this.workflows[channel].push(workflow);
             }
-            _this.emit(WorkflowEvents.Add);
-            resolve();
+            _this.saveWorkflowsToDatabase(channel)
+                .then(function () {
+                _this.emit(WorkflowEvents.Add);
+                resolve();
+            })
+                .catch(function (error) {
+                reject(error);
+            });
             var _a;
         });
     };
     RedisWorkflowManager.prototype.removeWorkflow = function (channel, name) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            if (typeof channel !== "string") {
+            if (!channel || typeof channel !== "string") {
                 throw new TypeError("Channel must be a valid string");
             }
-            if (typeof name !== "string") {
+            if (!name || typeof name !== "string") {
                 throw new TypeError("Name must be a valid string");
             }
             if (_this.workflows && _this.workflows[channel]) {
@@ -278,14 +284,50 @@ var RedisWorkflowManager = (function (_super) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
-            _this.emit(WorkflowEvents.Save, channel);
-            resolve();
+            if (_this.workflows) {
+                var jobs_2 = [];
+                _this.workflows[channel].map(function (workflow) {
+                    var nameHash = _this.hash(workflow.getName());
+                    var key = [channel, nameHash].join(":");
+                    jobs_2.push(_this.saveWorkflowToDb(key, workflow));
+                });
+                Promise.all(jobs_2)
+                    .then(function (workflowKeys) {
+                    var channelWorkflowId = [channel, _this.REDIS_WORKFLOW_KEY_SUFFIX].join(":");
+                    (_a = _this.client).sadd.apply(_a, [channelWorkflowId].concat(workflowKeys, [function (err, reply) {
+                            _this.emit(WorkflowEvents.Save, channel);
+                            resolve();
+                        }]));
+                    var _a;
+                })
+                    .catch(function (error) {
+                    reject(error);
+                });
+            }
+        });
+    };
+    RedisWorkflowManager.prototype.saveWorkflowToDb = function (key, workflow) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (!key || typeof key !== "string") {
+                throw new TypeError("Key must be valid string");
+            }
+            if (!workflow || typeof workflow !== "object") {
+                throw new TypeError("Workflow must be valid Workflow");
+            }
+            var workflowDict = workflow.toDict();
+            _this.client.set(key, JSON.stringify(workflowDict), function (err, reply) {
+                if (err !== null) {
+                    throw err;
+                }
+                resolve(key);
+            });
         });
     };
     RedisWorkflowManager.prototype.getWorkflowFromDb = function (key) {
         var _this = this;
         return new Promise(function (resolve, reject) {
-            if (key && typeof key !== "string") {
+            if (!key || typeof key !== "string") {
                 throw new TypeError("Key must be valid string");
             }
             _this.client.get(key, function (err, reply) {

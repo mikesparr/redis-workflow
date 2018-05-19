@@ -69,8 +69,8 @@ describe("RedisWorkflowManager", () => {
             [testEmptyKey]: [],
         });
 
-        // add persisted workflow for channel
-
+        // add default workflow
+        this.workflows = {};
         done();
     });
 
@@ -192,6 +192,17 @@ describe("RedisWorkflowManager", () => {
     }); // getWorkflows
 
     describe("addWorkflow", () => {
+        beforeAll((done) => {
+            // arrange: (delete workflows for channel from db)
+            client.del([testKey, "workflows"].join(":"), (err: Error, reply: string) => {
+                if (err !== null) {
+                    done.fail(err);
+                }
+
+                done();
+            });
+        });
+
         it("returns a Promise", () => {
             expect(manager.addWorkflow(testEmptyKey, testWorkflow1)).toBeInstanceOf(Promise);
         });
@@ -221,6 +232,18 @@ describe("RedisWorkflowManager", () => {
                 .catch((error) => {
                     done.fail(error);
                 });
+        });
+
+        it("saves updated workflows to database", (done) => {
+            client.smembers([testKey, "workflows"].join(":"), (err: Error, reply: string[]) => {
+                if (err !== null) {
+                    done.fail(err);
+                } else {
+                    expect(reply).toBeDefined();
+                    expect(reply.length).toBeGreaterThan(0);
+                    done();
+                }
+            });
         });
     }); // addWorkflow
 
