@@ -13,10 +13,43 @@ describe("DelayedAction", () => {
     const testName: string = "test";
     const testContext: Dictionary = {foo: "bar", inStock: 3};
 
-    it("instantiates a delayed action object", () => {
+    it("instantiates a delayed action object with just name", () => {
         testAction = new DelayedAction(testName).delay(1, "day");
         testAction.setContext(testContext);
         expect(testAction).toBeInstanceOf(DelayedAction);
+    });
+
+    it("instantiates a delayed action object with interval", () => {
+        const fakeAction: DelayedAction = new DelayedAction(testName, 1000);
+        fakeAction.setContext(testContext);
+        expect(fakeAction).toBeInstanceOf(DelayedAction);
+        expect(fakeAction.getIntervalAsMilliseconds()).toEqual(1000);
+    });
+
+    it("instantiates a delayed action object with context", () => {
+        const fakeAction: DelayedAction = new DelayedAction(testName, 1000, testContext);
+        expect(fakeAction).toBeInstanceOf(DelayedAction);
+        expect(fakeAction.getIntervalAsMilliseconds()).toEqual(1000);
+        expect(fakeAction.getContext()).toEqual(testContext);
+    });
+
+    it("instantiates a delayed action object with scheduled date", () => {
+        const stamp: number = Date.now();
+        const fakeAction: DelayedAction = new DelayedAction(testName, 1000, testContext, stamp);
+        expect(fakeAction).toBeInstanceOf(DelayedAction);
+        expect(fakeAction.getIntervalAsMilliseconds()).toEqual(1000);
+        expect(fakeAction.getContext()).toEqual(testContext);
+        expect(fakeAction.getScheduledDateAsTimestamp()).toEqual(stamp);
+    });
+
+    it("instantiates a delayed action object with recurrences", () => {
+        const stamp: number = Date.now();
+        const fakeAction: DelayedAction = new DelayedAction(testName, 1000, testContext, stamp, 5);
+        expect(fakeAction).toBeInstanceOf(DelayedAction);
+        expect(fakeAction.getIntervalAsMilliseconds()).toEqual(1000);
+        expect(fakeAction.getContext()).toEqual(testContext);
+        expect(fakeAction.getScheduledDateAsTimestamp()).toEqual(stamp);
+        expect(fakeAction.getRecurrences()).toEqual(5);
     });
 
     it("throws error if invalid name", () => {

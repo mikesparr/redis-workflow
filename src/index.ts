@@ -12,6 +12,7 @@ import IWorkflowManager from "./lib/IWorkflowManager";
 import RedisConfig from "./lib/RedisConfig";
 import Rule from "./lib/Rule";
 import Trigger from "./lib/Trigger";
+import Util from "./lib/Util";
 import Workflow from "./lib/Workflow";
 
 export {
@@ -26,6 +27,7 @@ export {
     RedisConfig,
     Rule,
     Trigger,
+    Util,
     Workflow,
 };
 
@@ -49,7 +51,7 @@ export enum WorkflowEvents {
 export class RedisWorkflowManager extends EventEmitter implements IWorkflowManager {
     protected client: redis.RedisClient;
     protected subscriber: redis.RedisClient;
-    protected workflows: Dictionary; // hashmap of channel, IWorkflow[]
+    protected workflows: Dictionary; // hashmap of channel: IWorkflow[]
 
     protected readonly DEFAULT_REDIS_HOST: string = "localhost";
     protected readonly DEFAULT_REDIS_PORT: number = 6379;
@@ -106,19 +108,13 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
 
         // check if channels declared, and load from db
         if (channels) {
-            const jobs: Array<Promise<void>> = [];
-
-            channels.map((ch) => {
-                jobs.push(this.loadWorkflowsFromDatabase(ch));
-            });
-
-            // process them
-            Promise.all(jobs)
-                .then((values: any[]) => {
-                    this.emit(WorkflowEvents.Ready);
+            this.reload(channels)
+                .then(() => {
+                    return this;
                 })
                 .catch((error) => {
-                    this.emit(WorkflowEvents.Error, (error));
+                    this.emit(WorkflowEvents.Error, error);
+                    return this;
                 });
         }
     }
@@ -176,7 +172,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
             }
 
             // save to database
-            this.saveWorkflowsToDatabase(channel)
+            this.saveWorkflowsToDatabaseForChannel(channel)
                 .then(() => {
                     this.emit(WorkflowEvents.Add);
                     resolve();
@@ -203,8 +199,15 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 this.workflows[channel] = channelFlow;
             }
 
-            this.emit(WorkflowEvents.Remove);
-            resolve();
+            // save to database
+            this.saveWorkflowsToDatabaseForChannel(channel)
+                .then(() => {
+                    this.emit(WorkflowEvents.Remove);
+                    resolve();
+                })
+                .catch((error) => {
+                    reject(error);
+                });
         });
     }
 
@@ -220,21 +223,11 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 throw new Error("No workflows exist for that channel");
             }
 
-            // store workflows by trigger name (only if valid trigger name)
-            // TODO: potentially convert to cache and if miss, get from workflows
-            const triggerMap: {[key: string]: IWorkflow} = {};
-            this.workflows[channel].map((flow: IWorkflow) => {
-                if (flow &&
-                    flow !== null &&
-                    flow.getTrigger() !== null &&
-                    flow.getTrigger().getName() !== null &&
-                    flow.getTrigger().getName() !== undefined) {
-                        triggerMap[flow.getTrigger().getName()] = flow;
-                }
-            });
+            const triggerMap: Dictionary = this.getTriggersAsDictForChannel(channel);
 
             // handler for incoming messages on channel
             this.subscriber.on("message", (ch: string, message: string) => {
+                // only process messages for this channel
                 if (ch === channel) {
                     if (message === this.PUBSUB_KILL_MESSAGE) {
                         this.subscriber.unsubscribe(channel);
@@ -252,20 +245,15 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                                         actions.map((action) => {
                                             action.setContext(context);
 
-                                            if (action && action instanceof DelayedAction) {
-                                                 // optionally listen for action by name
-                                                this.emit(action.getName(), action);
-                                                // use any scheduler you want
-                                                this.emit(WorkflowEvents.Schedule, action);
-                                                // global handler
-                                                this.emit(WorkflowEvents.Audit, action);
-                                            } else if (action && action instanceof ImmediateAction) {
-                                                 // optionally listen for action by name
-                                                 this.emit(action.getName(), action);
-                                                 // use any scheduler you want
-                                                 this.emit(WorkflowEvents.Immediate, action);
-                                                 // global handler
-                                                 this.emit(WorkflowEvents.Audit, action);
+                                            if (action) {
+                                                this.emit(action.getName(), action); // name-based
+                                                this.emit(WorkflowEvents.Audit, action); // global
+
+                                                if (action instanceof DelayedAction) {
+                                                    this.emit(WorkflowEvents.Schedule, action);
+                                                } else if (action instanceof ImmediateAction) {
+                                                    this.emit(WorkflowEvents.Immediate, action);
+                                                }
                                             } else {
                                                 this.emit(
                                                     WorkflowEvents.Error,
@@ -318,6 +306,54 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
+    public reload(channels: string[]): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!channels || channels.length === 0) {
+                throw new TypeError("Channels must be valid array of one or more strings");
+            }
+
+            const jobs: Array<Promise<void>> = [];
+
+            channels.map((ch) => {
+                jobs.push(this.loadWorkflowsFromDatabaseForChannel(ch));
+            });
+
+            // process them
+            Promise.all(jobs)
+                .then((values: any[]) => {
+                    this.emit(WorkflowEvents.Ready);
+                    resolve();
+                })
+                .catch((error) => {
+                    this.emit(WorkflowEvents.Error, (error));
+                });
+        });
+    }
+
+    public save(channels: string[]): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!channels || channels.length === 0) {
+                throw new TypeError("Channels must be valid array of one or more strings");
+            }
+
+            const jobs: Array<Promise<void>> = [];
+
+            channels.map((ch) => {
+                jobs.push(this.saveWorkflowsToDatabaseForChannel(ch));
+            });
+
+            // process them
+            Promise.all(jobs)
+                .then((values: any[]) => {
+                    this.emit(WorkflowEvents.Save);
+                    resolve();
+                })
+                .catch((error) => {
+                    this.emit(WorkflowEvents.Error, (error));
+                });
+        });
+    }
+
     public reset(channel?: string): Promise<void> {
         return new Promise((resolve, reject) => {
             // TODO:
@@ -326,12 +362,14 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                 // remove from db
                 // remove from memory
 
+            this.workflows = {};
+
             this.emit(WorkflowEvents.Reset);
             resolve();
         });
     }
 
-    protected saveWorkflowsToDatabase(channel: string): Promise<void> {
+    protected saveWorkflowsToDatabaseForChannel(channel: string): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
@@ -342,11 +380,11 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
 
                 this.workflows[channel].map((workflow: IWorkflow) => {
                     // build key
-                    const nameHash: number = this.hash(workflow.getName());
+                    const nameHash: number = Util.hash(workflow.getName());
                     const key: string = [channel, nameHash].join(":");
 
                     // queue job
-                    jobs.push(this.saveWorkflowToDb(key, workflow));
+                    jobs.push(this.saveWorkflowToDatabase(key, workflow));
                 });
 
                 // run jobs and add keys to workflows set
@@ -365,7 +403,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
-    protected saveWorkflowToDb(key: string, workflow: IWorkflow): Promise<string> {
+    protected saveWorkflowToDatabase(key: string, workflow: IWorkflow): Promise<string> {
         return new Promise((resolve, reject) => {
             if (!key || typeof key !== "string") {
                 throw new TypeError("Key must be valid string");
@@ -410,7 +448,7 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
-    protected loadWorkflowsFromDatabase(channel: string): Promise<void> {
+    protected loadWorkflowsFromDatabaseForChannel(channel: string): Promise<void> {
         return new Promise((resolve, reject) => {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
@@ -459,19 +497,19 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
         });
     }
 
-    /* tslint:disable */
-    protected hash(str: string): number {
-        let hash: number = 0;
-        const strlen: number = str.length;
+    protected getTriggersAsDictForChannel(channel: string): Dictionary {
+        const triggerDict: Dictionary = {};
 
-        if (strlen === 0) { return hash; }
+        this.workflows[channel].map((flow: IWorkflow) => {
+            if (flow &&
+                flow !== null &&
+                flow.getTrigger() !== null &&
+                flow.getTrigger().getName() !== null &&
+                flow.getTrigger().getName() !== undefined) {
+                    triggerDict[flow.getTrigger().getName()] = flow;
+            }
+        });
 
-        for (let i = 0; i < strlen; ++i) {
-            const code: number = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + code;
-            hash &= hash; // Int32
-        }
-        return (hash >>> 0); // uInt32
+        return triggerDict;
     }
-    /* tslint:enable */
 }

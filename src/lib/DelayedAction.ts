@@ -10,7 +10,7 @@ export default class DelayedAction extends Action {
                 intervalAsMillis?: number,
                 context?: Dictionary,
                 delayAsTimestamp?: number,
-                repeat?: boolean) {
+                recurrences?: number) {
 
         // valid name check in super
 
@@ -23,8 +23,8 @@ export default class DelayedAction extends Action {
         if (delayAsTimestamp && typeof delayAsTimestamp !== "number") {
             throw new TypeError("Delay must be a valid number"); // TODO: consider validating timestamp
         }
-        if (repeat && typeof repeat !== "boolean") {
-            throw new TypeError("Repeat flag must be boolean true or false");
+        if (recurrences && typeof recurrences !== "number") {
+            throw new TypeError("Recurrences must be valid number");
         }
 
         super(
@@ -32,12 +32,10 @@ export default class DelayedAction extends Action {
             ActionType.Delayed,
         );
 
-        this.recurrences = repeat ? 0 : 1; // 0 indefinitely
+        this.recurrences = recurrences ? recurrences : 1; // 0 repeat indefinitely
         this.interval = intervalAsMillis ? intervalAsMillis : 0;
-
-        if (delayAsTimestamp) {
-            this.scheduledAt = delayAsTimestamp;
-        }
+        this.context = context ? context : undefined;
+        this.scheduledAt = delayAsTimestamp ? delayAsTimestamp : undefined;
 
         return this;
     }

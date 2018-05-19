@@ -15,6 +15,7 @@ import {
     RedisWorkflowManager,
     Rule,
     Trigger,
+    Util,
     Workflow,
     WorkflowEvents,
 } from "../index";
@@ -59,7 +60,7 @@ describe("RedisWorkflowManager", () => {
     const client: any = redis.createClient(); // for confirming app TODO: mock
 
     beforeAll((done) => {
-        jest.setTimeout(6000); // 6 second timeout
+        jest.setTimeout(5000); // 5 second timeout
 
         // add test workflows
         manager.setWorkflows({
@@ -214,6 +215,10 @@ describe("RedisWorkflowManager", () => {
                 done();
             });
 
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
             // act
             manager.addWorkflow(testEmptyKey, testWorkflow1);
         });
@@ -259,6 +264,10 @@ describe("RedisWorkflowManager", () => {
                 done();
             });
 
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
             // act
             manager.removeWorkflow(testEmptyKey, testWorkflow1.getName());
         });
@@ -298,6 +307,10 @@ describe("RedisWorkflowManager", () => {
             manager.on(WorkflowEvents.Start, () => {
                 // assert
                 done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
             });
 
             // act
@@ -408,10 +421,60 @@ describe("RedisWorkflowManager", () => {
                 done();
             });
 
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
             // act
             manager.stop(testEmptyKey);
         });
     }); // stop
+
+    describe("reload", () => {
+        it("returns a Promise", () => {
+            expect(manager.reload([testKey2])).toBeInstanceOf(Promise);
+        });
+
+        it("emits an EventEmitter event", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Ready, () => {
+                // assert
+                done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
+            // act
+            manager.reload([testKey]);
+        });
+
+        // already tested db with constructor tests
+    }); // reload
+
+    describe("save", () => {
+        it("returns a Promise", () => {
+            expect(manager.save([testKey2])).toBeInstanceOf(Promise);
+        });
+
+        it("emits an EventEmitter event", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Save, () => {
+                // assert
+                done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
+            // act
+            manager.save([testKey]);
+        });
+
+        // database tested in reset
+    });
 
     describe("reset", () => {
         it("returns a Promise", () => {
@@ -425,9 +488,18 @@ describe("RedisWorkflowManager", () => {
                 done();
             });
 
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
             // act
             manager.reset();
         });
+
+        it("removes workflow from memory", () => {
+            expect(this.workflows).toEqual({});
+        });
+
     }); // reset
 
 }); // redis workflow

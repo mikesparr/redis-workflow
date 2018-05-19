@@ -24,6 +24,8 @@ var Rule_1 = require("./lib/Rule");
 exports.Rule = Rule_1.default;
 var Trigger_1 = require("./lib/Trigger");
 exports.Trigger = Trigger_1.default;
+var Util_1 = require("./lib/Util");
+exports.Util = Util_1.default;
 var Workflow_1 = require("./lib/Workflow");
 exports.Workflow = Workflow_1.default;
 var WorkflowEvents;
@@ -92,16 +94,13 @@ var RedisWorkflowManager = (function (_super) {
         }
         _this.workflows = {};
         if (channels) {
-            var jobs_1 = [];
-            channels.map(function (ch) {
-                jobs_1.push(_this.loadWorkflowsFromDatabase(ch));
-            });
-            Promise.all(jobs_1)
-                .then(function (values) {
-                _this.emit(WorkflowEvents.Ready);
+            _this.reload(channels)
+                .then(function () {
+                return _this;
             })
                 .catch(function (error) {
-                _this.emit(WorkflowEvents.Error, (error));
+                _this.emit(WorkflowEvents.Error, error);
+                return _this;
             });
         }
         return _this;
@@ -151,7 +150,7 @@ var RedisWorkflowManager = (function (_super) {
             else {
                 _this.workflows[channel].push(workflow);
             }
-            _this.saveWorkflowsToDatabase(channel)
+            _this.saveWorkflowsToDatabaseForChannel(channel)
                 .then(function () {
                 _this.emit(WorkflowEvents.Add);
                 resolve();
@@ -176,8 +175,14 @@ var RedisWorkflowManager = (function (_super) {
                 channelFlow = channelFlow.filter(function (flow) { return flow.getName() !== name; });
                 _this.workflows[channel] = channelFlow;
             }
-            _this.emit(WorkflowEvents.Remove);
-            resolve();
+            _this.saveWorkflowsToDatabaseForChannel(channel)
+                .then(function () {
+                _this.emit(WorkflowEvents.Remove);
+                resolve();
+            })
+                .catch(function (error) {
+                reject(error);
+            });
         });
     };
     RedisWorkflowManager.prototype.start = function (channel) {
@@ -192,16 +197,7 @@ var RedisWorkflowManager = (function (_super) {
             if (_this.workflows && !_this.workflows[channel]) {
                 throw new Error("No workflows exist for that channel");
             }
-            var triggerMap = {};
-            _this.workflows[channel].map(function (flow) {
-                if (flow &&
-                    flow !== null &&
-                    flow.getTrigger() !== null &&
-                    flow.getTrigger().getName() !== null &&
-                    flow.getTrigger().getName() !== undefined) {
-                    triggerMap[flow.getTrigger().getName()] = flow;
-                }
-            });
+            var triggerMap = _this.getTriggersAsDictForChannel(channel);
             _this.subscriber.on("message", function (ch, message) {
                 if (ch === channel) {
                     if (message === _this.PUBSUB_KILL_MESSAGE) {
@@ -218,15 +214,15 @@ var RedisWorkflowManager = (function (_super) {
                                     .then(function (actions) {
                                     actions.map(function (action) {
                                         action.setContext(context_1);
-                                        if (action && action instanceof DelayedAction_1.default) {
+                                        if (action) {
                                             _this.emit(action.getName(), action);
-                                            _this.emit(WorkflowEvents.Schedule, action);
                                             _this.emit(WorkflowEvents.Audit, action);
-                                        }
-                                        else if (action && action instanceof ImmediateAction_1.default) {
-                                            _this.emit(action.getName(), action);
-                                            _this.emit(WorkflowEvents.Immediate, action);
-                                            _this.emit(WorkflowEvents.Audit, action);
+                                            if (action instanceof DelayedAction_1.default) {
+                                                _this.emit(WorkflowEvents.Schedule, action);
+                                            }
+                                            else if (action instanceof ImmediateAction_1.default) {
+                                                _this.emit(WorkflowEvents.Immediate, action);
+                                            }
                                         }
                                         else {
                                             _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
@@ -271,27 +267,68 @@ var RedisWorkflowManager = (function (_super) {
             });
         });
     };
+    RedisWorkflowManager.prototype.reload = function (channels) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (!channels || channels.length === 0) {
+                throw new TypeError("Channels must be valid array of one or more strings");
+            }
+            var jobs = [];
+            channels.map(function (ch) {
+                jobs.push(_this.loadWorkflowsFromDatabaseForChannel(ch));
+            });
+            Promise.all(jobs)
+                .then(function (values) {
+                _this.emit(WorkflowEvents.Ready);
+                resolve();
+            })
+                .catch(function (error) {
+                _this.emit(WorkflowEvents.Error, (error));
+            });
+        });
+    };
+    RedisWorkflowManager.prototype.save = function (channels) {
+        var _this = this;
+        return new Promise(function (resolve, reject) {
+            if (!channels || channels.length === 0) {
+                throw new TypeError("Channels must be valid array of one or more strings");
+            }
+            var jobs = [];
+            channels.map(function (ch) {
+                jobs.push(_this.saveWorkflowsToDatabaseForChannel(ch));
+            });
+            Promise.all(jobs)
+                .then(function (values) {
+                _this.emit(WorkflowEvents.Save);
+                resolve();
+            })
+                .catch(function (error) {
+                _this.emit(WorkflowEvents.Error, (error));
+            });
+        });
+    };
     RedisWorkflowManager.prototype.reset = function (channel) {
         var _this = this;
         return new Promise(function (resolve, reject) {
+            _this.workflows = {};
             _this.emit(WorkflowEvents.Reset);
             resolve();
         });
     };
-    RedisWorkflowManager.prototype.saveWorkflowsToDatabase = function (channel) {
+    RedisWorkflowManager.prototype.saveWorkflowsToDatabaseForChannel = function (channel) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
                 throw new TypeError("Channel parameter must be a string");
             }
             if (_this.workflows) {
-                var jobs_2 = [];
+                var jobs_1 = [];
                 _this.workflows[channel].map(function (workflow) {
-                    var nameHash = _this.hash(workflow.getName());
+                    var nameHash = Util_1.default.hash(workflow.getName());
                     var key = [channel, nameHash].join(":");
-                    jobs_2.push(_this.saveWorkflowToDb(key, workflow));
+                    jobs_1.push(_this.saveWorkflowToDatabase(key, workflow));
                 });
-                Promise.all(jobs_2)
+                Promise.all(jobs_1)
                     .then(function (workflowKeys) {
                     var channelWorkflowId = [channel, _this.REDIS_WORKFLOW_KEY_SUFFIX].join(":");
                     (_a = _this.client).sadd.apply(_a, [channelWorkflowId].concat(workflowKeys, [function (err, reply) {
@@ -306,7 +343,7 @@ var RedisWorkflowManager = (function (_super) {
             }
         });
     };
-    RedisWorkflowManager.prototype.saveWorkflowToDb = function (key, workflow) {
+    RedisWorkflowManager.prototype.saveWorkflowToDatabase = function (key, workflow) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (!key || typeof key !== "string") {
@@ -345,7 +382,7 @@ var RedisWorkflowManager = (function (_super) {
             });
         });
     };
-    RedisWorkflowManager.prototype.loadWorkflowsFromDatabase = function (channel) {
+    RedisWorkflowManager.prototype.loadWorkflowsFromDatabaseForChannel = function (channel) {
         var _this = this;
         return new Promise(function (resolve, reject) {
             if (typeof channel !== "string") {
@@ -384,18 +421,18 @@ var RedisWorkflowManager = (function (_super) {
             });
         });
     };
-    RedisWorkflowManager.prototype.hash = function (str) {
-        var hash = 0;
-        var strlen = str.length;
-        if (strlen === 0) {
-            return hash;
-        }
-        for (var i = 0; i < strlen; ++i) {
-            var code = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + code;
-            hash &= hash;
-        }
-        return (hash >>> 0);
+    RedisWorkflowManager.prototype.getTriggersAsDictForChannel = function (channel) {
+        var triggerDict = {};
+        this.workflows[channel].map(function (flow) {
+            if (flow &&
+                flow !== null &&
+                flow.getTrigger() !== null &&
+                flow.getTrigger().getName() !== null &&
+                flow.getTrigger().getName() !== undefined) {
+                triggerDict[flow.getTrigger().getName()] = flow;
+            }
+        });
+        return triggerDict;
     };
     return RedisWorkflowManager;
 }(events_1.EventEmitter));
