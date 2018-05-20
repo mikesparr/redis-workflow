@@ -42,6 +42,7 @@ var WorkflowEvents;
     WorkflowEvents["Reset"] = "reset";
     WorkflowEvents["Schedule"] = "schedule";
     WorkflowEvents["Immediate"] = "immediate";
+    WorkflowEvents["Invalid"] = "invalid";
     WorkflowEvents["Audit"] = "audit";
     WorkflowEvents["Kill"] = "kill";
 })(WorkflowEvents = exports.WorkflowEvents || (exports.WorkflowEvents = {}));
@@ -206,28 +207,33 @@ var RedisWorkflowManager = (function (_super) {
                     }
                     else if (message && typeof message === "string") {
                         try {
-                            var jsonMessage = JSON.parse(message);
-                            var event_1 = jsonMessage.event, context_1 = jsonMessage.context;
+                            var jsonMessage_1 = JSON.parse(message);
+                            var event_1 = jsonMessage_1.event, context_1 = jsonMessage_1.context;
                             var activeFlow = (event_1 && context_1) ? triggerMap[event_1] : null;
                             if (activeFlow) {
                                 activeFlow.getActionsForContext(context_1)
                                     .then(function (actions) {
-                                    actions.map(function (action) {
-                                        action.setContext(context_1);
-                                        if (action) {
-                                            _this.emit(action.getName(), action);
-                                            _this.emit(WorkflowEvents.Audit, action);
-                                            if (action instanceof DelayedAction_1.default) {
-                                                _this.emit(WorkflowEvents.Schedule, action);
+                                    if (actions.length === 0) {
+                                        _this.emit(WorkflowEvents.Invalid, jsonMessage_1);
+                                    }
+                                    else {
+                                        actions.map(function (action) {
+                                            action.setContext(context_1);
+                                            if (action) {
+                                                _this.emit(action.getName(), action);
+                                                _this.emit(WorkflowEvents.Audit, action);
+                                                if (action instanceof DelayedAction_1.default) {
+                                                    _this.emit(WorkflowEvents.Schedule, action);
+                                                }
+                                                else if (action instanceof ImmediateAction_1.default) {
+                                                    _this.emit(WorkflowEvents.Immediate, action);
+                                                }
                                             }
-                                            else if (action instanceof ImmediateAction_1.default) {
-                                                _this.emit(WorkflowEvents.Immediate, action);
+                                            else {
+                                                _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
                                             }
-                                        }
-                                        else {
-                                            _this.emit(WorkflowEvents.Error, new TypeError("Action object was null"));
-                                        }
-                                    });
+                                        });
+                                    }
                                 })
                                     .catch(function (error) {
                                     _this.emit(WorkflowEvents.Error, error);

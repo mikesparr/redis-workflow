@@ -44,6 +44,7 @@ export enum WorkflowEvents {
     Reset = "reset", // fired when reset
     Schedule = "schedule", // fired when actions are ActionType.Delay
     Immediate = "immediate", // fired when actions are ActionType.Immediate
+    Invalid = "invalid", // fired for all workflows when rules do not pass
     Audit = "audit", // fired for all actions
     Kill = "kill", // fired when channel stopped listening
 }
@@ -242,24 +243,29 @@ export class RedisWorkflowManager extends EventEmitter implements IWorkflowManag
                             if (activeFlow) {
                                 activeFlow.getActionsForContext(context)
                                     .then((actions) => {
-                                        actions.map((action) => {
-                                            action.setContext(context);
+                                        if (actions.length === 0) {
+                                            // emit invalid response to handle workflows that rules are not met
+                                            this.emit(WorkflowEvents.Invalid, jsonMessage);
+                                        } else {
+                                            actions.map((action) => {
+                                                action.setContext(context);
 
-                                            if (action) {
-                                                this.emit(action.getName(), action); // name-based
-                                                this.emit(WorkflowEvents.Audit, action); // global
+                                                if (action) {
+                                                    this.emit(action.getName(), action); // name-based
+                                                    this.emit(WorkflowEvents.Audit, action); // global
 
-                                                if (action instanceof DelayedAction) {
-                                                    this.emit(WorkflowEvents.Schedule, action);
-                                                } else if (action instanceof ImmediateAction) {
-                                                    this.emit(WorkflowEvents.Immediate, action);
+                                                    if (action instanceof DelayedAction) {
+                                                        this.emit(WorkflowEvents.Schedule, action);
+                                                    } else if (action instanceof ImmediateAction) {
+                                                        this.emit(WorkflowEvents.Immediate, action);
+                                                    }
+                                                } else {
+                                                    this.emit(
+                                                        WorkflowEvents.Error,
+                                                        new TypeError("Action object was null"));
                                                 }
-                                            } else {
-                                                this.emit(
-                                                    WorkflowEvents.Error,
-                                                    new TypeError("Action object was null"));
-                                            }
-                                        });
+                                            });
+                                        } // valid flow
                                     })
                                     .catch((error) => {
                                         this.emit(WorkflowEvents.Error, error);

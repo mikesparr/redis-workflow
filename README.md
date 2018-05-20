@@ -154,6 +154,19 @@ manager.on(WorkflowEvents.Audit, (action) => {
     // publish action to stream pipeline
 });
 
+// optionally handle actions that didn't meet rules
+manager.on(WorkflowEvents.Invalid, (message) => {
+    // do something
+    switch (message.event) {
+        case "newOrder":
+            // notify cust svc to try and complete order
+            break;
+        default:
+            // log somewhere
+            break;
+    }
+});
+
 // start manager (subscribes to pubsub channel)
 manager.start("babyDivision")
     .then(() => {

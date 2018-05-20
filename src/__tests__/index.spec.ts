@@ -39,6 +39,7 @@ describe("RedisWorkflowManager", () => {
     const testEventName2: string = "test_event_2";
     const testEvent: string = JSON.stringify( {event: testEventName, context: {age: 77}} );
     const testEvent2: string = JSON.stringify( {event: testEventName2, context: {age: 55}} );
+    const testInvalidEvent: string = JSON.stringify( {event: testEventName2, context: {age: 22}} );
     const testActionName: string = "test_action_999";
     const testActionName2: string = "test_action_000";
     const testRuleName: string = "Is retired";
@@ -393,6 +394,38 @@ describe("RedisWorkflowManager", () => {
                 .then(() => {
                     setTimeout(() => {
                         client.publish(testKey3, testEvent, (pubErr: Error, _1: number) => {
+                            // now kill it
+                            setTimeout(() => {
+                                client.publish(testKey3, testKillMessage, (killErr: Error, _2: number) => {
+                                    // do nothing
+                                });
+                            }, 1000);
+                        });
+                    }, 500);
+                })
+                .catch((error) => {
+                    done.fail(error);
+                });
+        });
+
+        it("starts a pubsub listener and emits invalid workflows", (done) => {
+            // arrange
+            manager.on(WorkflowEvents.Invalid, (message) => {
+                // assert
+                expect(message.event).toBeDefined();
+                expect(message.context).toBeDefined();
+                done();
+            });
+
+            manager.on(WorkflowEvents.Error, (error) => {
+                done.fail(error);
+            });
+
+            // act
+            manager.start(testKey3)
+                .then(() => {
+                    setTimeout(() => {
+                        client.publish(testKey3, testInvalidEvent, (pubErr: Error, _1: number) => {
                             // now kill it
                             setTimeout(() => {
                                 client.publish(testKey3, testKillMessage, (killErr: Error, _2: number) => {
