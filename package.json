@@ -1,6 +1,6 @@
 {
   "name": "redis-workflow",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "Simple Promise based multi-channel workflow rules engine using Redis backing",
   "main": "index.js",
   "scripts": {
@@ -10,14 +10,14 @@
     "coverage": "./node_modules/.bin/jest --coverage"
   },
   "devDependencies": {
-    "@types/jest": "^22.2.3",
-    "jest": "^22.4.3",
-    "tslint": "^5.10.0",
-    "typescript": "^2.8.3"
+    "@types/jest": "^23.3.10",
+    "jest": "^23.6.0",
+    "tslint": "^5.11.0",
+    "typescript": "^3.2.1"
   },
   "dependencies": {
     "@types/redis": "^2.8.6",
-    "events": "^2.0.0",
+    "events": "^3.0.0",
     "mozjexl": "^1.1.6",
     "redis": "^2.8.0"
   },
