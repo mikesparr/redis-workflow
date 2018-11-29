@@ -14,11 +14,11 @@ export default class DelayedAction extends Action {
     repeat(times?: number): DelayedAction;
     setScheduledDateFrom(timestamp?: number): DelayedAction;
     protected calcDelayAsTimestamp(from?: number): number;
-    private secondAsMillis();
-    private minuteAsMillis();
-    private hourAsMillis();
-    private dayAsMillis();
-    private weekAsMillis();
-    private monthAsMillis(days?);
-    private yearAsMillis();
+    private secondAsMillis;
+    private minuteAsMillis;
+    private hourAsMillis;
+    private dayAsMillis;
+    private weekAsMillis;
+    private monthAsMillis;
+    private yearAsMillis;
 }

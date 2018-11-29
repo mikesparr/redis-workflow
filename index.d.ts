@@ -14,7 +14,7 @@ import Rule from "./lib/Rule";
 import Trigger from "./lib/Trigger";
 import Util from "./lib/Util";
 import Workflow from "./lib/Workflow";
-export { ActionType, DelayedAction, IAction, ImmediateAction, IRule, ITrigger, IWorkflow, IWorkflowManager, RedisConfig, Rule, Trigger, Util, Workflow };
+export { ActionType, DelayedAction, IAction, ImmediateAction, IRule, ITrigger, IWorkflow, IWorkflowManager, RedisConfig, Rule, Trigger, Util, Workflow, };
 export declare enum WorkflowEvents {
     Error = "error",
     Add = "add",
@@ -30,7 +30,7 @@ export declare enum WorkflowEvents {
     Immediate = "immediate",
     Invalid = "invalid",
     Audit = "audit",
-    Kill = "kill",
+    Kill = "kill"
 }
 export declare class RedisWorkflowManager extends EventEmitter implements IWorkflowManager {
     protected client: redis.RedisClient;

@@ -2,7 +2,7 @@ import IAction from "./IAction";
 export declare enum ActionType {
     Delayed = 0,
     Immediate = 1,
-    Named = 2,
+    Named = 2
 }
 export declare abstract class Action implements IAction {
     protected context: Dictionary;

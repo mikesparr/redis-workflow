@@ -1,8 +1,11 @@
 "use strict";
 var __extends = (this && this.__extends) || (function () {
-    var extendStatics = Object.setPrototypeOf ||
-        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
@@ -136,6 +139,7 @@ var RedisWorkflowManager = (function (_super) {
     RedisWorkflowManager.prototype.addWorkflow = function (channel, workflow) {
         var _this = this;
         return new Promise(function (resolve, reject) {
+            var _a;
             if (!channel || typeof channel !== "string") {
                 throw new TypeError("Channel must be a valid string");
             }
@@ -159,7 +163,6 @@ var RedisWorkflowManager = (function (_super) {
                 .catch(function (error) {
                 reject(error);
             });
-            var _a;
         });
     };
     RedisWorkflowManager.prototype.removeWorkflow = function (channel, name) {
@@ -336,12 +339,12 @@ var RedisWorkflowManager = (function (_super) {
                 });
                 Promise.all(jobs_1)
                     .then(function (workflowKeys) {
+                    var _a;
                     var channelWorkflowId = [channel, _this.REDIS_WORKFLOW_KEY_SUFFIX].join(":");
                     (_a = _this.client).sadd.apply(_a, [channelWorkflowId].concat(workflowKeys, [function (err, reply) {
                             _this.emit(WorkflowEvents.Save, channel);
                             resolve();
                         }]));
-                    var _a;
                 })
                     .catch(function (error) {
                     reject(error);
